@@ -3,7 +3,7 @@
 Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영)
 
 ---
-
+<img width="1720" height="908" alt="Image" src="https://github.com/user-attachments/assets/41d3bde3-89c5-4503-bb19-b995d966c046" />
 ## 📁 폴더 구조
 
 ```
