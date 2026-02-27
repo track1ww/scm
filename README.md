@@ -4,6 +4,8 @@ Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영
 
 
 제목은 생성형 ai를 활용한 scm 통합관리 시스템으로 하겠습니다. 근데 약간의 수정을 곁들인..
+
+<img width="242" height="208" alt="Image" src="https://github.com/user-attachments/assets/2c3035db-0717-4709-afe8-c882742701f2" />
 ---
 <img width="1720" height="908" alt="Image" src="https://github.com/user-attachments/assets/41d3bde3-89c5-4503-bb19-b995d966c046" />
 ## 📁 폴더 구조
