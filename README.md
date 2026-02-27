@@ -1,4 +1,4 @@
-# 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반(수정중!)
+# 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반(에러 수정중!)
 
 Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영)
 
