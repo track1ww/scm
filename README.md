@@ -1,4 +1,4 @@
-# 🏢 SCM 통합관리 시스템 – SAP 물류/SCM 모듈 기반
+# 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반
 
 Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (SAP 모듈 구조 반영)
 
@@ -8,7 +8,7 @@ Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (SAP 모듈 구조 �
 
 ```
 scm_sap/
-├── app.py                      ← 메인 대시보드 (SAP 모듈별 현황)
+├── app.py                      ← 메인 대시보드 (모듈별 현황)
 ├── pages/
 │   ├── 1_🛒_MM_자재관리.py     ← 공급사, 자재마스터, 견적서, 발주서(PO)
 │   ├── 2_🛍️_SD_판매출하.py     ← 고객마스터, 판매주문(SO), 출하, 청구서, 반품
