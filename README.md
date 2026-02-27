@@ -1,4 +1,4 @@
-# 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반
+# 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반(수정중!)
 
 Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영)
 
@@ -10,7 +10,8 @@ Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영
 ---
 
 
-<img width="1720" height="908" alt="Image" src="https://github.com/user-attachments/assets/41d3bde3-89c5-4503-bb19-b995d966c046" />
+<img width="1760" height="930" alt="image" src="https://github.com/user-attachments/assets/5bb0bc48-1dc5-49a7-9348-f650aefa21f3" />
+
 
 
 ## 📁 폴더 구조
