@@ -1,6 +1,6 @@
 # 🏢 SCM 통합관리 시스템 –  물류/SCM 모듈 기반
 
-Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (SAP 모듈 구조 반영)
+Python + Streamlit + SQLite 기반의 경량 SCM 시스템 (모듈 구조 반영)
 
 ---
 
@@ -36,9 +36,7 @@ streamlit run app.py
 
 ---
 
-## 📋 SAP 모듈 → 기능 매핑
-
-| SAP 모듈 | 주요 기능 |
+## 📋 모듈 기능 매핑
 |----------|-----------|
 | 🛒 MM (Materials Management) | 공급사, 자재마스터, 견적서, 발주서(PO) |
 | 🛍️ SD (Sales & Distribution) | 고객마스터, 판매주문, 출하, 청구서, 반품 |
