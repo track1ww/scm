@@ -127,8 +127,8 @@ main_tabs = st.tabs([
 # 대분류3: 송장검증(14), 세금계산서(15), 지급관리(16), KPI(18)
 
 with main_tabs[0]:
-    sub0 = st.tabs(["🏭 공급사", "📦 자재 마스터", "🔗 대체자재", "💡 구매정보(PIR)", "⭐ 공급사 평가", "📊 공급사 분석"])
-    tabs = {0: sub0[0], 1: sub0[1], 2: sub0[2], 3: sub0[3], 17: sub0[4], "bi_sup": sub0[5]}
+    sub0 = st.tabs(["🏭 공급사", "📦 자재 마스터", "🔗 대체자재", "💡 구매정보(PIR)", "⭐ 공급사 평가", "🔄 재발주점·자동발주", "🤝 VMI", "📊 공급사 분석"])
+    tabs = {0: sub0[0], 1: sub0[1], 2: sub0[2], 3: sub0[3], 17: sub0[4], "rop": sub0[5], "vmi": sub0[6], "bi_sup": sub0[7]}
 
 with main_tabs[1]:
     sub1 = st.tabs(["📝 구매요청(PR)", "📋 구매품의서", "💬 견적(RFQ)", "🔀 견적 비교", "📄 계약", "🗂️ 블랭킷PO", "📋 발주서(PO)", "📊 구매 분석"])
@@ -2324,3 +2324,184 @@ with tabs["bi_pay"]:
             st.dataframe(df_sup_unpaid, use_container_width=True, hide_index=True)
 
         conn.close()
+
+# ══ 재발주점(ROP) · 자동발주 ══════════════════════════════════════════
+with tabs["rop"]:
+    def _ac_mm(t,c,ct="TEXT"):
+        try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
+        except: pass
+    _ac_mm("materials","reorder_point","REAL DEFAULT 0")
+    _ac_mm("materials","reorder_qty","REAL DEFAULT 0")
+    _ac_mm("materials","lead_time_days","INTEGER DEFAULT 7")
+    _ac_mm("materials","auto_order","INTEGER DEFAULT 0")
+
+    st.subheader("🔄 재발주점(ROP) · 자동발주 설정")
+    st.caption("재고가 재발주점 이하로 떨어지면 자동으로 PR 생성")
+
+    col_set, col_mon = st.columns([1, 2])
+    with col_set:
+        st.subheader("재발주점 설정")
+        conn=get_db()
+        mats=[r for r in conn.execute("SELECT id,material_code,material_name,min_stock,reorder_point,reorder_qty,lead_time_days,auto_order FROM materials ORDER BY material_name").fetchall()]
+        conn.close()
+        if not mats: st.info("자재 없음")
+        else:
+            mat_map={f"{r['material_code']} {r['material_name']}":r for r in mats}
+            sel_m=st.selectbox("자재 선택",list(mat_map.keys()))
+            m=mat_map[sel_m]
+            with st.form("rop_f"):
+                a,b=st.columns(2); rop=a.number_input("재발주점(ROP)",min_value=0.0,value=float(m['reorder_point'] or 0),format="%.1f"); rqty=b.number_input("발주수량",min_value=0.0,value=float(m['reorder_qty'] or 0),format="%.1f")
+                lt=st.number_input("리드타임(일)",min_value=1,value=int(m['lead_time_days'] or 7))
+                auto=st.checkbox("자동발주 활성화",value=bool(m['auto_order']))
+                if st.form_submit_button("✅ 저장",use_container_width=True):
+                    conn=get_db(); conn.execute("UPDATE materials SET reorder_point=?,reorder_qty=?,lead_time_days=?,auto_order=? WHERE id=?",(rop,rqty,lt,1 if auto else 0,m['id']))
+                    conn.commit(); conn.close(); st.success("저장!"); st.rerun()
+
+        st.divider()
+        if st.button("🤖 자동발주 실행 (재고 점검)",use_container_width=True,type="primary"):
+            conn=get_db()
+            mats_auto=[r for r in conn.execute("""
+                SELECT m.id,m.material_name,m.reorder_point,m.reorder_qty,m.lead_time_days,
+                       COALESCE(i.stock_qty,0) AS stock
+                FROM materials m
+                LEFT JOIN inventory i ON m.material_name=i.item_name
+                WHERE m.auto_order=1 AND m.reorder_point>0""").fetchall()]
+            created=0
+            for r in mats_auto:
+                if r['stock'] <= r['reorder_point']:
+                    try:
+                        prn=gen_number("PR")
+                        conn.execute("""INSERT INTO purchase_requests(pr_number,material_name,quantity,required_date,status,note)
+                            VALUES(?,?,?,date('now',?),?,?)""",
+                            (prn,r['material_name'],r['reorder_qty'],f"+{r['lead_time_days']} days","자동생성",f"자동발주: 재고{r['stock']} ≤ ROP{r['reorder_point']}"))
+                        created+=1
+                    except: pass
+            conn.commit(); conn.close()
+            if created: st.success(f"✅ PR {created}건 자동 생성!")
+            else: st.info("자동발주 대상 없음")
+
+    with col_mon:
+        st.subheader("📊 재발주점 모니터링")
+        conn=get_db(); df_rop=pd.read_sql_query("""
+            SELECT m.material_code AS 자재코드, m.material_name AS 자재명,
+                   COALESCE(i.stock_qty,0) AS 현재고,
+                   m.reorder_point AS ROP, m.min_stock AS 안전재고,
+                   m.reorder_qty AS 발주수량, m.lead_time_days AS 리드타임,
+                   CASE m.auto_order WHEN 1 THEN '✅자동' ELSE '수동' END AS 자동발주,
+                   CASE WHEN COALESCE(i.stock_qty,0) <= m.reorder_point AND m.reorder_point>0 THEN '🔴 발주필요'
+                        WHEN COALESCE(i.stock_qty,0) <= m.min_stock THEN '🟠 안전재고미달'
+                        ELSE '🟢 정상' END AS 상태
+            FROM materials m
+            LEFT JOIN inventory i ON m.material_name=i.item_name
+            WHERE m.reorder_point>0
+            ORDER BY COALESCE(i.stock_qty,0)-m.reorder_point""", conn); conn.close()
+        if df_rop.empty: st.info("ROP 설정된 자재 없음")
+        else:
+            alert=df_rop[df_rop['상태'].str.contains('발주')]
+            if not alert.empty: st.error(f"⚠️ 즉시 발주 필요: {len(alert)}종")
+            st.dataframe(df_rop, use_container_width=True, hide_index=True)
+            try:
+                import plotly.express as px
+                fig=px.bar(df_rop,x='자재명',y=['현재고','ROP','안전재고'],barmode='group',
+                           title="자재별 재고 vs ROP",color_discrete_map={'현재고':'#3b82f6','ROP':'#f97316','안전재고':'#ef4444'})
+                fig.update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0))
+                st.plotly_chart(fig,use_container_width=True)
+            except: pass
+
+
+# ══ VMI (Vendor Managed Inventory) ══════════════════════════════════════════
+with tabs["vmi"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS vmi_agreements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vmi_number TEXT UNIQUE,
+            supplier_id INTEGER, supplier_name TEXT,
+            material_name TEXT,
+            min_qty REAL DEFAULT 0, max_qty REAL DEFAULT 0,
+            replenish_trigger REAL DEFAULT 0,
+            review_cycle TEXT DEFAULT '주간',
+            status TEXT DEFAULT '활성',
+            note TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS vmi_replenishments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vmi_id INTEGER, supplier_name TEXT,
+            material_name TEXT, current_stock REAL,
+            replenish_qty REAL, status TEXT DEFAULT '요청',
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    st.subheader("🤝 VMI — 공급사 관리 재고")
+    st.caption("공급사가 직접 재고를 모니터링하고 보충하는 협력 재고 관리 방식")
+
+    col_form, col_mon = st.columns([1, 2])
+    with col_form:
+        st.subheader("VMI 협약 등록")
+        conn=get_db()
+        sups_v=[r for r in conn.execute("SELECT id,supplier_name FROM suppliers WHERE status='활성'").fetchall()]
+        conn.close()
+        with st.form("vmi_f", clear_on_submit=True):
+            sup_v=st.selectbox("공급사",([r['supplier_name'] for r in sups_v] if sups_v else ["직접입력"]))
+            mat_v=st.text_input("관리 품목 *")
+            a,b=st.columns(2); mn_v=a.number_input("최소재고",min_value=0.0,format="%.1f"); mx_v=b.number_input("최대재고",min_value=0.0,format="%.1f")
+            trig_v=st.number_input("보충 트리거 재고",min_value=0.0,value=mn_v,format="%.1f",help="이 재고 이하가 되면 자동 보충요청")
+            cyc_v=st.selectbox("검토주기",["일간","주간","격주","월간"])
+            st_v=st.selectbox("상태",["활성","일시중지","종료"]); note_v=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not mat_v: st.error("품목 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        sup_id=next((r['id'] for r in sups_v if r['supplier_name']==sup_v),None)
+                        conn.execute("INSERT INTO vmi_agreements(vmi_number,supplier_id,supplier_name,material_name,min_qty,max_qty,replenish_trigger,review_cycle,status,note) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                            (gen_number("VMI"),sup_id,sup_v,mat_v,mn_v,mx_v,trig_v,cyc_v,st_v,note_v))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+
+        st.divider()
+        if st.button("🔄 VMI 재고 점검 & 보충요청",use_container_width=True,type="primary"):
+            conn=get_db()
+            vmis=[r for r in conn.execute("SELECT v.*,COALESCE(i.stock_qty,0) AS cur_stock FROM vmi_agreements v LEFT JOIN inventory i ON v.material_name=i.item_name WHERE v.status='활성'").fetchall()]
+            cnt=0
+            for v in vmis:
+                if v['cur_stock']<=v['replenish_trigger']:
+                    need=v['max_qty']-v['cur_stock']
+                    conn.execute("INSERT INTO vmi_replenishments(vmi_id,supplier_name,material_name,current_stock,replenish_qty,status) VALUES(?,?,?,?,?,?)",
+                        (v['id'],v['supplier_name'],v['material_name'],v['cur_stock'],need,"요청"))
+                    cnt+=1
+            conn.commit(); conn.close()
+            if cnt: st.success(f"✅ {cnt}건 보충요청 생성")
+            else: st.info("보충 필요 없음")
+
+    with col_mon:
+        conn=get_db(); df_vmi=pd.read_sql_query("""
+            SELECT v.vmi_number AS VMI번호, v.supplier_name AS 공급사,
+                   v.material_name AS 품목,
+                   COALESCE(i.stock_qty,0) AS 현재고,
+                   v.min_qty AS 최소재고, v.max_qty AS 최대재고,
+                   v.replenish_trigger AS 보충트리거,
+                   v.review_cycle AS 검토주기, v.status AS 상태,
+                   CASE WHEN COALESCE(i.stock_qty,0)<=v.replenish_trigger THEN '🔴 보충필요'
+                        WHEN COALESCE(i.stock_qty,0)<=v.min_qty THEN '🟠 최소재고'
+                        WHEN COALESCE(i.stock_qty,0)>=v.max_qty THEN '🔵 최대초과'
+                        ELSE '🟢 정상' END AS 재고상태
+            FROM vmi_agreements v
+            LEFT JOIN inventory i ON v.material_name=i.item_name
+            WHERE v.status='활성' ORDER BY 재고상태""", conn)
+        df_rep=pd.read_sql_query("""
+            SELECT supplier_name AS 공급사, material_name AS 품목,
+                   current_stock AS 현재고, replenish_qty AS 보충수량,
+                   status AS 상태, created_at AS 요청일시
+            FROM vmi_replenishments ORDER BY id DESC LIMIT 20""", conn)
+        conn.close()
+
+        if not df_vmi.empty:
+            needs=df_vmi[df_vmi['재고상태'].str.contains('보충')]
+            if not needs.empty: st.error(f"⚠️ VMI 보충 필요: {len(needs)}건")
+            st.dataframe(df_vmi,use_container_width=True,hide_index=True)
+        st.divider()
+        st.subheader("보충요청 이력")
+        if not df_rep.empty: st.dataframe(df_rep,use_container_width=True,hide_index=True)
+        else: st.info("보충요청 없음")

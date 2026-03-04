@@ -20,20 +20,23 @@ init_trade_db()
 
 st.title("🚢 TM – Transportation & Trade Management (운송/수출입 관리)")
 
-tabs = st.tabs([
-    "🔑 API 설정",
-    "💱 환율 관리",
-    "📦 HS Code",
-    "🌐 FTA 관리",
-    "📄 CI / B/L",
-    "📥 수입신고",
-    "📤 수출면장",
-    "💳 L/C 신용장",
-    "🔍 수입요건",
-    "⚠️ 전략물자",
-    "🚛 운송오더",
-    "📊 현황",
-])
+main_tm = st.tabs(["🔧 기준·설정", "📦 수출입 업무", "🚛 운송·결제", "📊 무역 분석"])
+
+with main_tm[0]:
+    sub0 = st.tabs(["🔑 API 설정", "💱 환율 관리", "📦 HS Code", "🌐 FTA 관리"])
+    tabs = {0: sub0[0], 1: sub0[1], 2: sub0[2], 3: sub0[3]}
+
+with main_tm[1]:
+    sub1 = st.tabs(["📄 CI / B/L", "📥 수입신고", "📤 수출면장", "🔍 수입요건", "⚠️ 전략물자", "📜 원산지(C/O)"])
+    tabs.update({4: sub1[0], 5: sub1[1], 6: sub1[2], 8: sub1[3], 9: sub1[4], "co": sub1[5]})
+
+with main_tm[2]:
+    sub2 = st.tabs(["💳 L/C 신용장", "🚛 운송오더", "💰 운임 계산"])
+    tabs.update({7: sub2[0], 10: sub2[1], "freight": sub2[2]})
+
+with main_tm[3]:
+    sub3 = st.tabs(["📊 수출입 현황", "💱 환율 영향 분석", "🌍 국가별 분석"])
+    tabs.update({11: sub3[0], "bi_fx": sub3[1], "bi_country": sub3[2]})
 
 # ── 0. API 설정 ──────────────────────────────────────
 with tabs[0]:
@@ -1060,3 +1063,197 @@ with tabs[11]:
             dest_cnt = df_exp_s['destination_country'].value_counts().reset_index()
             dest_cnt.columns = ['국가','건수']
             st.bar_chart(dest_cnt.set_index('국가'))
+
+# ── C/O 원산지 증명서 ─────────────────────────────────
+with tabs["co"]:
+    def _ac_tm(t,c,ct="TEXT"):
+        try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
+        except: pass
+    try:
+        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS origin_certificates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, co_number TEXT UNIQUE NOT NULL,
+            export_id INTEGER, exporter_name TEXT, importer_name TEXT,
+            hs_code TEXT, item_name TEXT, quantity REAL, unit TEXT DEFAULT 'EA',
+            fob_value REAL DEFAULT 0, currency TEXT DEFAULT 'USD',
+            origin_country TEXT DEFAULT 'KR', dest_country TEXT,
+            co_type TEXT DEFAULT 'FTA', fta_agreement TEXT,
+            issue_date TEXT, valid_to TEXT,
+            status TEXT DEFAULT '발급신청',
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("📜 원산지 증명서 발급")
+        conn=get_db()
+        exps=[r[0] for r in conn.execute("SELECT export_declaration_number FROM export_declarations ORDER BY id DESC LIMIT 30").fetchall()]
+        conn.close()
+        with st.form("co_f", clear_on_submit=True):
+            exp_sel = st.selectbox("수출면장", ["직접입력"]+exps)
+            a,b = st.columns(2); exp_nm=a.text_input("수출자(회사명) *"); imp_nm=b.text_input("수입자")
+            c,d = st.columns(2); hs=c.text_input("HS Code"); item_co=d.text_input("품목명 *")
+            e,f,g = st.columns(3); qty_co=e.number_input("수량",min_value=0.0,format="%.2f"); unit_co=f.selectbox("단위",["EA","KG","MT","L","M","SET"]); fob=g.number_input("FOB금액",min_value=0.0,format="%.2f")
+            h,i = st.columns(2); cur_co=h.selectbox("통화",["USD","EUR","JPY","CNY","KRW"]); origin=i.text_input("원산지",value="KR")
+            j,k = st.columns(2); dest_co=j.text_input("목적국"); co_type=k.selectbox("C/O유형",["FTA","일반(비FTA)","GSP","특혜"])
+            fta_ag = st.selectbox("FTA 협정",["한-미","한-EU","한-중","한-ASEAN","한-일","RCEP","기타"])
+            l,m = st.columns(2); iss_co=l.date_input("발급일"); vt_co=m.date_input("유효기간",value=date.today()+timedelta(days=365))
+            st_co = st.selectbox("상태",["발급신청","검토중","발급완료","반려"])
+            if st.form_submit_button("✅ 등록", use_container_width=True):
+                if not exp_nm or not item_co: st.error("필수 누락")
+                else:
+                    try:
+                        conn=get_db(); conn.execute("""INSERT INTO origin_certificates(co_number,exporter_name,importer_name,hs_code,item_name,quantity,unit,fob_value,currency,origin_country,dest_country,co_type,fta_agreement,issue_date,valid_to,status)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(gen_number("CO"),exp_nm,imp_nm,hs,item_co,qty_co,unit_co,fob,cur_co,origin,dest_co,co_type,fta_ag,str(iss_co),str(vt_co),st_co))
+                        conn.commit(); conn.close(); st.success("C/O 등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("C/O 목록")
+        conn=get_db(); df_co=pd.read_sql_query("SELECT co_number AS C/O번호,exporter_name AS 수출자,item_name AS 품목,hs_code AS HS,origin_country AS 원산지,dest_country AS 목적국,co_type AS 유형,fta_agreement AS FTA협정,issue_date AS 발급일,valid_to AS 유효기간,status AS 상태 FROM origin_certificates ORDER BY id DESC",conn); conn.close()
+        if df_co.empty: st.info("없음")
+        else:
+            today_s=datetime.now().strftime("%Y-%m-%d")
+            def co_c(r): return ['background-color:#fee2e2']*len(r) if str(r['유효기간'])<today_s else ['']*len(r)
+            st.dataframe(df_co.style.apply(co_c,axis=1), use_container_width=True, hide_index=True)
+
+
+# ── 운임 계산 ─────────────────────────────────────────
+with tabs["freight"]:
+    try:
+        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS freight_quotes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, fq_number TEXT UNIQUE NOT NULL,
+            transport_mode TEXT, origin TEXT, destination TEXT,
+            weight_kg REAL DEFAULT 0, cbm REAL DEFAULT 0,
+            carrier TEXT, freight_cost REAL DEFAULT 0, currency TEXT DEFAULT 'USD',
+            surcharges TEXT, total_cost_krw REAL DEFAULT 0,
+            valid_until TEXT, note TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    st.subheader("💰 운임 계산기")
+    col_l, col_r = st.columns([1,1])
+    with col_l:
+        st.markdown("#### 운임 견적 등록")
+        with st.form("fq_f", clear_on_submit=True):
+            a,b=st.columns(2); tm=a.selectbox("운송방식",["해상FCL","해상LCL","항공","육상","복합"]); car=b.text_input("운송사/포워더")
+            c,d=st.columns(2); orig=c.text_input("출발지"); dest=d.text_input("도착지")
+            e,f,g=st.columns(3); wt=e.number_input("중량(kg)",min_value=0.0,format="%.1f"); cbm=f.number_input("CBM(㎥)",min_value=0.0,format="%.3f"); cur_fr=g.selectbox("통화",["USD","EUR","KRW"])
+            fr_cost=st.number_input("기본운임",min_value=0.0,format="%.2f")
+            st.caption("할증료 (BAF, CAF, THC, 보험료 등)")
+            h,i,j=st.columns(3); baf=h.number_input("BAF",min_value=0.0,format="%.0f"); caf=i.number_input("CAF",min_value=0.0,format="%.0f"); thc=j.number_input("THC",min_value=0.0,format="%.0f")
+            exr=st.number_input("적용환율(₩/외화)",min_value=0.0,value=1300.0,format="%.1f")
+            total_usd=fr_cost+baf+caf+thc; total_krw=total_usd*exr if cur_fr!='KRW' else total_usd
+            st.info(f"총 운임: {cur_fr} {total_usd:,.2f}  ≈  ₩{total_krw:,.0f}")
+            vu=st.date_input("유효기간"); fnote=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 저장", use_container_width=True):
+                try:
+                    surj=f"BAF:{baf},CAF:{caf},THC:{thc}"
+                    conn=get_db(); conn.execute("""INSERT INTO freight_quotes(fq_number,transport_mode,origin,destination,weight_kg,cbm,carrier,freight_cost,currency,surcharges,total_cost_krw,valid_until,note)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(gen_number("FQ"),tm,orig,dest,wt,cbm,car,fr_cost,cur_fr,surj,total_krw,str(vu),fnote))
+                    conn.commit(); conn.close(); st.success("저장!"); st.rerun()
+                except Exception as e: st.error(f"오류:{e}")
+    with col_r:
+        st.markdown("#### 운임 비교표")
+        conn=get_db(); df_fq=pd.read_sql_query("""SELECT fq_number AS 견적번호,transport_mode AS 방식,carrier AS 운송사,origin AS 출발,destination AS 도착,weight_kg AS 중량,cbm AS CBM,freight_cost AS 운임,currency AS 통화,total_cost_krw AS 원화환산,valid_until AS 유효기간 FROM freight_quotes ORDER BY total_cost_krw""",conn); conn.close()
+        if df_fq.empty: st.info("없음")
+        else:
+            st.dataframe(df_fq, use_container_width=True, hide_index=True)
+            if len(df_fq)>=2:
+                cheapest=df_fq.iloc[0]
+                st.success(f"💡 최저 운임: {cheapest['운송사']} — ₩{cheapest['원화환산']:,.0f}")
+
+
+# ── 환율 영향 분석 BI ──────────────────────────────────
+with tabs["bi_fx"]:
+    try:
+        import plotly.express as px; import plotly.graph_objects as go
+        from plotly.subplots import make_subplots; HAS_PL2=True
+    except: HAS_PL2=False
+    if not HAS_PL2: st.warning("pip install plotly")
+    else:
+        from datetime import datetime, timedelta
+        conn=get_db()
+        st.subheader("💱 환율 영향 분석")
+        # 환율 데이터
+        df_fx=pd.read_sql_query("SELECT currency,rate,created_at FROM exchange_rates ORDER BY created_at DESC LIMIT 200",conn)
+        if not df_fx.empty:
+            df_fx['날짜']=df_fx['created_at'].str[:10]
+            c1,c2,c3=st.columns(3)
+            for i,(cur2,label) in enumerate(zip(['USD','EUR','CNY'],['달러','유로','위안'])):
+                cur_df=df_fx[df_fx['currency']==cur2]
+                if not cur_df.empty:
+                    latest=cur_df.iloc[0]['rate']
+                    prev=cur_df.iloc[1]['rate'] if len(cur_df)>1 else latest
+                    [c1,c2,c3][i].metric(f"{label}({cur2})",f"₩{latest:,.2f}",f"{latest-prev:+.2f}")
+            # 환율 추이 차트
+            curs=df_fx['currency'].unique().tolist()
+            sel_cur=st.multiselect("통화 선택",curs,default=curs[:3] if len(curs)>=3 else curs)
+            fig=go.Figure()
+            for c3x in sel_cur:
+                cd=df_fx[df_fx['currency']==c3x].sort_values('날짜')
+                if not cd.empty: fig.add_trace(go.Scatter(x=cd['날짜'],y=cd['rate'],name=c3x,mode='lines+markers'))
+            fig.update_layout(title="통화별 환율 추이",height=300,margin=dict(l=0,r=0,t=40,b=0))
+            st.plotly_chart(fig,use_container_width=True)
+
+        # 수입 환율 영향 분석
+        st.subheader("📥 수입 원가 환율 영향")
+        df_imp=pd.read_sql_query("SELECT currency,cif_value,customs_duty,total_tax,created_at FROM import_declarations ORDER BY created_at",conn)
+        if not df_imp.empty:
+            col_l,col_r=st.columns(2)
+            with col_l:
+                df_cur_imp=df_imp.groupby('currency').agg(건수=('cif_value','count'),CIF합계=('cif_value','sum'),관세합계=('customs_duty','sum')).reset_index()
+                st.plotly_chart(px.bar(df_cur_imp,x='currency',y='CIF합계',color='currency',title="통화별 수입 CIF금액").update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
+            with col_r:
+                st.plotly_chart(px.pie(df_cur_imp,names='currency',values='건수',title="수입 통화 비중",hole=0.4).update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
+        conn.close()
+
+
+# ── 국가별 분석 BI ────────────────────────────────────
+with tabs["bi_country"]:
+    try:
+        import plotly.express as px; import plotly.graph_objects as go; HAS_PL3=True
+    except: HAS_PL3=False
+    if not HAS_PL3: st.warning("pip install plotly")
+    else:
+        conn=get_db()
+        st.subheader("🌍 국가별 수출입 분석")
+
+        # KPI
+        exp_cnt=conn.execute("SELECT COUNT(*) FROM export_declarations").fetchone()[0]
+        imp_cnt=conn.execute("SELECT COUNT(*) FROM import_declarations").fetchone()[0]
+        exp_fob=conn.execute("SELECT COALESCE(SUM(fob_value),0) FROM export_declarations").fetchone()[0]
+        imp_cif=conn.execute("SELECT COALESCE(SUM(cif_value),0) FROM import_declarations").fetchone()[0]
+        c1,c2,c3,c4=st.columns(4)
+        c1.metric("수출 건수",f"{exp_cnt}건"); c2.metric("수출 FOB합계",f"${exp_fob:,.0f}")
+        c3.metric("수입 건수",f"{imp_cnt}건"); c4.metric("수입 CIF합계",f"${imp_cif:,.0f}")
+        st.divider()
+
+        col_l,col_r=st.columns(2)
+        with col_l:
+            df_exp_c=pd.read_sql_query("SELECT destination_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(fob_value),0) AS FOB합계 FROM export_declarations GROUP BY destination_country ORDER BY FOB합계 DESC LIMIT 12",conn)
+            if not df_exp_c.empty:
+                st.plotly_chart(px.bar(df_exp_c,y='국가',x='FOB합계',orientation='h',color='FOB합계',color_continuous_scale='Blues',title="수출 국가별 FOB금액 TOP12").update_layout(height=320,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
+        with col_r:
+            df_imp_c=pd.read_sql_query("SELECT origin_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(cif_value),0) AS CIF합계 FROM import_declarations GROUP BY origin_country ORDER BY CIF합계 DESC LIMIT 12",conn)
+            if not df_imp_c.empty:
+                st.plotly_chart(px.bar(df_imp_c,y='국가',x='CIF합계',orientation='h',color='CIF합계',color_continuous_scale='Oranges',title="수입 국가별 CIF금액 TOP12").update_layout(height=320,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
+
+        # 전략물자 고위험 국가
+        st.subheader("⚠️ 전략물자 국가별 위험 현황")
+        df_sg=pd.read_sql_query("SELECT destination_country AS 국가,result AS 결과,COUNT(*) AS 건수 FROM strategic_goods_checks GROUP BY destination_country,result ORDER BY 건수 DESC",conn)
+        if not df_sg.empty:
+            clr={'이상없음':'#22c55e','저위험':'#3b82f6','고위험':'#f97316','통제대상':'#ef4444'}
+            st.plotly_chart(px.bar(df_sg,x='국가',y='건수',color='결과',color_discrete_map=clr,title="국가별 전략물자 결과").update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
+
+        # 월별 수출입 추이
+        st.subheader("📈 월별 수출입 추이")
+        df_exp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수출건수,ROUND(SUM(fob_value),0) AS FOB FROM export_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        df_imp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수입건수,ROUND(SUM(cif_value),0) AS CIF FROM import_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        if not df_exp_m.empty or not df_imp_m.empty:
+            col_l2,col_r2=st.columns(2)
+            with col_l2:
+                if not df_exp_m.empty: st.plotly_chart(px.area(df_exp_m,x='월',y='FOB',title="수출 FOB 추이",color_discrete_sequence=['#3b82f6']).update_layout(height=240,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
+            with col_r2:
+                if not df_imp_m.empty: st.plotly_chart(px.area(df_imp_m,x='월',y='CIF',title="수입 CIF 추이",color_discrete_sequence=['#f97316']).update_layout(height=240,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
+        conn.close()

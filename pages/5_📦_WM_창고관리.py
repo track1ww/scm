@@ -3,15 +3,50 @@ import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.db import get_db, gen_number
+from datetime import datetime, timedelta, date
+
+def _ac(t,c,ct="TEXT"):
+    try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
+    except: pass
+
+_ac("inventory","lot_number"); _ac("inventory","expiry_date")
+_ac("inventory","serial_number"); _ac("stock_movements","lot_number")
+_ac("stock_movements","reference_number"); _ac("stock_movements","movement_number")
+_ac("goods_receipts","fifo_layer","INTEGER DEFAULT 1")
+_ac("materials","max_stock","REAL DEFAULT 0"); _ac("materials","new_avg","REAL DEFAULT 0")
 
 st.title("📦 WM/EWM – Warehouse Management (창고관리)")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "🏗️ 창고/Bin 등록", "📥 입고(ASN/검수)", "📊 재고 현황", "🔄 재고 이동", "🔍 재고 실사",
-    "📊 재고 분석", "🔮 수요·폐기 예측"])
+main_tabs = st.tabs(["🏗️ 기준정보", "📦 입출고", "📊 재고 관리", "🔍 실사·폐기", "📈 분석·예측"])
+tabs = {}
+with main_tabs[0]:
+    s = st.tabs(["🏗️ 창고/Bin 등록", "🏷️ LOT·시리얼 관리", "📍 Putaway 위치최적화"])
+    tabs.update({"wh": s[0], "lot": s[1], "putaway": s[2]})
+with main_tabs[1]:
+    s = st.tabs(["📥 입고(ASN/검수)", "📤 출고지시(FIFO)", "🌊 피킹 웨이브", "🔄 재고 이동"])
+    tabs.update({"gr": s[0], "issue": s[1], "wave": s[2], "move": s[3]})
+with main_tabs[2]:
+    s = st.tabs(["📊 재고 현황", "🔔 안전재고 알림"])
+    tabs.update({"stock": s[0], "safety": s[1]})
+with main_tabs[3]:
+    s = st.tabs(["🔍 재고 실사", "🗑️ 폐기·반송"])
+    tabs.update({"count": s[0], "dispose": s[1]})
+with main_tabs[4]:
+    s = st.tabs(["📊 재고 분석", "🔮 수요·폐기 예측"])
+    tabs.update({"bi": s[0], "pred": s[1]})
+
+with st.sidebar:
+    st.divider(); st.markdown("### 📊 분석 기간")
+    bp = st.selectbox("기간",["최근 1개월","최근 3개월","최근 6개월","최근 1년","전체"],key="wm_bp")
+    bi_from = (datetime.now()-timedelta(days={"최근 1개월":30,"최근 3개월":90,"최근 6개월":180,"최근 1년":365,"전체":9999}[bp])).strftime("%Y-%m-%d")
+
+try:
+    import plotly.express as px; import plotly.graph_objects as go
+    import numpy as np; from plotly.subplots import make_subplots; HAS_PL=True
+except: HAS_PL=False
 
 # ── 창고 & 빈 등록 ──────────────────────────────────────────
-with tab1:
+with tabs["wh"]:
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("창고 등록")
@@ -94,7 +129,7 @@ with tab1:
             st.info("Bin 없음")
 
 # ── 입고 (ASN + 검수) ──────────────────────────────────────────
-with tab2:
+with tabs["gr"]:
     col_form, col_list = st.columns([1, 2])
     with col_form:
         st.subheader("ASN 입고예정 등록")
@@ -167,8 +202,20 @@ with tab2:
                         (asn_id,item_name,expected_qty,received_qty,defect_qty,inspector,result,note)
                         VALUES(?,?,?,?,?,?,?,?)""",
                         (asn_opts.get(asn_sel), item_name, exp_qty, recv_qty, defect, inspector, result, note))
+                    # ── QM 수입검사 자동 트리거 ──────────────────
+                    try:
+                        from utils.db import gen_number as _gn
+                        conn.execute("""INSERT INTO quality_inspections
+                            (inspection_number,inspection_type,item_name,lot_number,
+                             lot_size,sample_qty,pass_qty,fail_qty,inspector,result,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                            (_gn("QI"),"수입검사",item_name,"",exp_qty,recv_qty,
+                             recv_qty-defect,defect,inspector,
+                             "합격" if result=="정상" else ("조건부합격" if result=="부분불량" else "불합격"),
+                             f"WM입고검수 자동연동 / {note}"))
+                    except: pass
                     conn.commit(); conn.close()
-                    st.success("검수 등록 완료!"); st.rerun()
+                    st.success("검수 등록 완료! (QM 수입검사 자동 생성)"); st.rerun()
     with col_l2:
         conn = get_db()
         df2 = pd.read_sql_query("""
@@ -186,7 +233,7 @@ with tab2:
             st.info("검수 데이터 없음")
 
 # ── 재고 현황 ──────────────────────────────────────────
-with tab3:
+with tabs["stock"]:
     col_form, col_list = st.columns([1, 2])
     with col_form:
         st.subheader("재고 등록/수정")
@@ -256,7 +303,7 @@ with tab3:
             st.metric("총 재고금액", f"₩{df['재고금액'].sum():,.0f}")
 
 # ── 재고 이동 ──────────────────────────────────────────
-with tab4:
+with tabs["move"]:
     col_form, col_list = st.columns([1, 2])
     with col_form:
         st.subheader("재고 이동 등록")
@@ -298,7 +345,7 @@ with tab4:
             st.info("이동 이력 없음")
 
 # ── 재고 실사 ──────────────────────────────────────────
-with tab5:
+with tabs["count"]:
     st.subheader("🔍 재고 실사 보고서")
     conn = get_db()
     df = pd.read_sql_query("""
@@ -319,6 +366,8 @@ with tab5:
         st.metric("총 재고 차이금액", f"₩{df['차이금액'].sum():,.0f}")
 
     st.divider()
+
+with tabs["dispose"]:
     st.subheader("🗑️ 폐기/반송 처리")
     col_form2, col_list2 = st.columns([1, 2])
     with col_form2:
@@ -358,9 +407,161 @@ with tab5:
             st.info("폐기 없음")
 
 # ══════════════════════════════════════════════════════
-# 탭 6 — 재고 분석
+# LOT·시리얼 관리
 # ══════════════════════════════════════════════════════
-with tab6:
+with tabs["lot"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("LOT / 시리얼 등록")
+        conn = get_db()
+        items_lot = [r[0] for r in conn.execute("SELECT DISTINCT item_name FROM inventory").fetchall()]
+        conn.close()
+        with st.form("lot_f", clear_on_submit=True):
+            li = st.selectbox("품목", items_lot if items_lot else ["직접입력"])
+            a,b = st.columns(2); lot_n = a.text_input("LOT 번호"); ser_n = b.text_input("시리얼 번호")
+            c,d = st.columns(2); mfg_d = c.date_input("제조일"); exp_d = d.date_input("유통기한", value=date.today()+timedelta(days=365))
+            e,f = st.columns(2); lot_qty = e.number_input("수량", min_value=1, value=1); wh_lot = f.text_input("창고/Bin")
+            if st.form_submit_button("✅ 등록", use_container_width=True):
+                try:
+                    conn = get_db()
+                    conn.execute("""UPDATE inventory SET lot_number=?, expiry_date=?, serial_number=?
+                        WHERE item_name=?""", (lot_n, str(exp_d), ser_n, li))
+                    conn.execute("""INSERT INTO stock_movements(movement_number,item_code,item_name,movement_type,quantity,warehouse,lot_number)
+                        VALUES(?,?,?,?,?,?,?)""", (gen_number("LOT"), li, li, "LOT등록", lot_qty, wh_lot, lot_n))
+                    conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("LOT / 유통기한 현황")
+        conn = get_db()
+        df_lot = pd.read_sql_query("""
+            SELECT item_name AS 품목, lot_number AS LOT번호, serial_number AS 시리얼,
+                   stock_qty AS 재고, expiry_date AS 유통기한,
+                   CAST(julianday(expiry_date)-julianday('now') AS INTEGER) AS 잔여일,
+                   warehouse AS 창고
+            FROM inventory WHERE lot_number IS NOT NULL AND lot_number!=''
+            ORDER BY expiry_date""", conn)
+        conn.close()
+        if df_lot.empty: st.info("LOT 등록 없음")
+        else:
+            today_s = datetime.now().strftime("%Y-%m-%d")
+            d30 = (datetime.now()+timedelta(days=30)).strftime("%Y-%m-%d")
+            exp_soon = df_lot[df_lot['유통기한'] <= d30]
+            if not exp_soon.empty: st.error(f"⚠️ 30일 내 유통기한 만료: {len(exp_soon)}개")
+            def lot_color(r):
+                if str(r['유통기한']) < today_s: return ['background-color:#fee2e2']*len(r)
+                if str(r['유통기한']) <= d30: return ['background-color:#fef9c3']*len(r)
+                return ['']*len(r)
+            st.dataframe(df_lot.style.apply(lot_color, axis=1), use_container_width=True, hide_index=True)
+
+# ══════════════════════════════════════════════════════
+# 출고지시 (FIFO/FEFO)
+# ══════════════════════════════════════════════════════
+with tabs["issue"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("📤 출고지시 등록")
+        st.caption("FEFO(유통기한 빠른 것 먼저) / FIFO(입고 순서) 자동 적용")
+        conn = get_db()
+        items_issue = [r[0] for r in conn.execute("SELECT DISTINCT item_name FROM inventory WHERE stock_qty>0").fetchall()]
+        conn.close()
+        with st.form("issue_f", clear_on_submit=True):
+            iss_item = st.selectbox("출고 품목 *", items_issue if items_issue else ["없음"])
+            a,b = st.columns(2); iss_qty = a.number_input("출고수량", min_value=1, value=1)
+            iss_method = b.selectbox("피킹방식", ["FEFO(유통기한)", "FIFO(입고순)", "수동"])
+            iss_to = st.text_input("출고처 (SO번호 또는 생산오더)")
+            iss_note = st.text_area("비고", height=40)
+            if st.form_submit_button("✅ 출고지시", use_container_width=True):
+                if not items_issue: st.error("재고 없음")
+                else:
+                    try:
+                        conn = get_db()
+                        # 재고 차감
+                        avail = conn.execute("SELECT COALESCE(stock_qty,0) FROM inventory WHERE item_name=?", (iss_item,)).fetchone()
+                        if not avail or avail[0] < iss_qty:
+                            st.error(f"재고 부족 (가용:{avail[0] if avail else 0})")
+                        else:
+                            conn.execute("UPDATE inventory SET stock_qty=stock_qty-? WHERE item_name=?", (iss_qty, iss_item))
+                            conn.execute("""INSERT INTO stock_movements(movement_number,item_code,item_name,movement_type,quantity,reference_number)
+                                VALUES(?,?,?,?,?,?)""", (gen_number("ISS"), iss_item, iss_item, f"출고({iss_method})", iss_qty, iss_to))
+                            # ── SD 배송 상태 자동 연동 ──────────────────
+                            if iss_to:
+                                try:
+                                    conn.execute("""UPDATE sales_orders SET status='배송중'
+                                        WHERE order_number=? AND status IN ('출하준비','생산/조달중','주문접수')""", (iss_to,))
+                                except: pass
+                            conn.commit(); conn.close()
+                            st.success(f"출고지시 완료 — {iss_method} 적용" + (" (SD 상태→배송중)" if iss_to else "")); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("출고 이력")
+        conn = get_db()
+        df_iss = pd.read_sql_query("""
+            SELECT movement_number AS 출고번호, item_name AS 품목,
+                   quantity AS 수량, reference_number AS 참조,
+                   created_at AS 출고일
+            FROM stock_movements WHERE movement_type LIKE '출고%'
+            ORDER BY id DESC LIMIT 50""", conn)
+        conn.close()
+        if df_iss.empty: st.info("출고 이력 없음")
+        else: st.dataframe(df_iss, use_container_width=True, hide_index=True)
+        st.divider()
+        st.subheader("📋 FEFO 피킹 우선순위")
+        conn = get_db()
+        df_fefo = pd.read_sql_query("""
+            SELECT item_name AS 품목, lot_number AS LOT, stock_qty AS 재고,
+                   expiry_date AS 유통기한,
+                   CAST(julianday(expiry_date)-julianday('now') AS INTEGER) AS 잔여일,
+                   warehouse AS 창고
+            FROM inventory WHERE stock_qty>0 AND expiry_date IS NOT NULL
+            ORDER BY expiry_date, item_name""", conn)
+        conn.close()
+        if df_fefo.empty: st.info("유통기한 등록 재고 없음")
+        else: st.dataframe(df_fefo, use_container_width=True, hide_index=True)
+
+# ══════════════════════════════════════════════════════
+# 안전재고 알림
+# ══════════════════════════════════════════════════════
+with tabs["safety"]:
+    st.subheader("🔔 안전재고 모니터링")
+    conn = get_db()
+    df_safety = pd.read_sql_query("""
+        SELECT m.material_code AS 자재코드, m.material_name AS 품목,
+               COALESCE(i.stock_qty, 0) AS 현재고,
+               m.min_stock AS 안전재고,
+               m.max_stock AS 최대재고,
+               COALESCE(i.stock_qty,0) - m.min_stock AS 여유재고,
+               CASE
+                   WHEN COALESCE(i.stock_qty,0) = 0 THEN '🔴 재고없음'
+                   WHEN COALESCE(i.stock_qty,0) < m.min_stock THEN '🟠 안전재고미달'
+                   WHEN COALESCE(i.stock_qty,0) < m.min_stock * 1.2 THEN '🟡 경고'
+                   ELSE '🟢 정상'
+               END AS 상태
+        FROM materials m
+        LEFT JOIN inventory i ON m.material_code = i.item_code
+        WHERE m.min_stock > 0
+        ORDER BY 여유재고""", conn)
+    conn.close()
+    if df_safety.empty:
+        st.info("안전재고 기준이 설정된 품목 없음 (자재마스터에서 min_stock 설정)")
+    else:
+        danger = df_safety[df_safety['상태'].isin(['🔴 재고없음', '🟠 안전재고미달'])]
+        warn = df_safety[df_safety['상태'] == '🟡 경고']
+        c1,c2,c3 = st.columns(3)
+        c1.metric("재고없음·미달", f"{len(danger)}품목", delta_color="inverse")
+        c2.metric("경고", f"{len(warn)}품목", delta_color="inverse")
+        c3.metric("정상", f"{len(df_safety)-len(danger)-len(warn)}품목")
+        if not danger.empty:
+            st.error("⚠️ 즉시 발주 필요 품목")
+            st.dataframe(danger, use_container_width=True, hide_index=True)
+        if not warn.empty:
+            st.warning("주의 품목")
+            st.dataframe(warn, use_container_width=True, hide_index=True)
+        st.divider()
+        st.subheader("전체 안전재고 현황")
+        st.dataframe(df_safety, use_container_width=True, hide_index=True)
+
+
+with tabs["bi"]:
     try:
         import plotly.express as px
         import plotly.graph_objects as go
@@ -488,7 +689,7 @@ with tab6:
 # ══════════════════════════════════════════════════════
 # 탭 7 — 수요·폐기 예측
 # ══════════════════════════════════════════════════════
-with tab7:
+with tabs["pred"]:
     try:
         import plotly.express as px
         import plotly.graph_objects as go
@@ -616,7 +817,7 @@ with tab7:
                    MAX(sm.created_at) AS 마지막이동일,
                    CAST(julianday('now')-julianday(MAX(sm.created_at)) AS INTEGER) AS 미이동일수
             FROM inventory i
-            LEFT JOIN stock_movements sm ON i.item_code=sm.item_code
+            LEFT JOIN stock_movements sm ON i.item_name=sm.item_name
             WHERE i.stock_qty>0
             GROUP BY i.item_code, i.warehouse
             ORDER BY 미이동일수 DESC NULLS LAST""", conn)
@@ -675,3 +876,201 @@ with tab7:
                 st.plotly_chart(fig6, use_container_width=True)
 
         conn.close()
+
+# ══ Putaway 위치 최적화 ══════════════════════════════════════════
+with tabs["putaway"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS putaway_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_name TEXT, item_category TEXT,
+            preferred_zone TEXT, preferred_bin TEXT,
+            priority INTEGER DEFAULT 1,
+            rule_type TEXT DEFAULT 'ABC',
+            note TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS putaway_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_number TEXT UNIQUE,
+            item_name TEXT, lot_number TEXT,
+            quantity INTEGER DEFAULT 0,
+            from_location TEXT DEFAULT '입고대기',
+            to_zone TEXT, to_bin TEXT,
+            assigned_to TEXT,
+            status TEXT DEFAULT '대기',
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    col_l, col_r = st.columns([1,2])
+    with col_l:
+        st.subheader("📍 Putaway 규칙 등록")
+        st.caption("품목/카테고리별 최적 보관 위치 규칙 설정")
+        with st.form("pa_rule_f", clear_on_submit=True):
+            item_pa=st.text_input("품목명 (공백=카테고리 전체 적용)")
+            cat_pa=st.selectbox("카테고리",["원자재","반제품","완제품","소모품","냉장품","위험물","대형품"])
+            a,b=st.columns(2); zone_pa=a.text_input("보관 구역(Zone)"); bin_pa=b.text_input("Bin 위치")
+            rt=st.selectbox("규칙 유형",["ABC 분류","무게기준","온도요건","회전율기준","FIFO"])
+            pri=st.slider("우선순위",1,5,1); note_pa=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 규칙 등록",use_container_width=True):
+                try:
+                    conn=get_db()
+                    conn.execute("INSERT INTO putaway_rules(item_name,item_category,preferred_zone,preferred_bin,priority,rule_type,note) VALUES(?,?,?,?,?,?,?)",
+                        (item_pa,cat_pa,zone_pa,bin_pa,pri,rt,note_pa))
+                    conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                except Exception as e: st.error(f"오류:{e}")
+
+        st.divider()
+        st.subheader("📋 Putaway 작업 생성")
+        conn=get_db()
+        pending_asn=[r for r in conn.execute("SELECT item_name,received_qty FROM inbound_inspection WHERE result IN ('정상','부분불량') ORDER BY id DESC LIMIT 20").fetchall()]
+        conn.close()
+        if pending_asn:
+            asn_map={f"{r['item_name']} ({r['received_qty']}개)":r for r in pending_asn}
+            sel_asn=st.selectbox("입고 품목",list(asn_map.keys()))
+            asn_d=asn_map[sel_asn]
+            # 규칙 자동 추천
+            conn=get_db()
+            rule=conn.execute("SELECT preferred_zone,preferred_bin FROM putaway_rules WHERE item_name=? OR item_name='' ORDER BY priority LIMIT 1",(asn_d['item_name'],)).fetchone()
+            conn.close()
+            a2,b2=st.columns(2)
+            to_zone=a2.text_input("배치 구역",value=rule['preferred_zone'] if rule else "")
+            to_bin=b2.text_input("Bin",value=rule['preferred_bin'] if rule else "")
+            worker=st.text_input("담당자")
+            if st.button("📋 작업 생성",use_container_width=True):
+                try:
+                    conn=get_db()
+                    conn.execute("INSERT INTO putaway_tasks(task_number,item_name,quantity,to_zone,to_bin,assigned_to) VALUES(?,?,?,?,?,?)",
+                        (gen_number("PUT"),asn_d['item_name'],asn_d['received_qty'],to_zone,to_bin,worker))
+                    conn.commit(); conn.close(); st.success("작업 생성!"); st.rerun()
+                except Exception as e: st.error(f"오류:{e}")
+
+    with col_r:
+        st.subheader("Putaway 작업 현황")
+        conn=get_db(); df_put=pd.read_sql_query("""
+            SELECT task_number AS 작업번호, item_name AS 품목, quantity AS 수량,
+                   from_location AS 출발, to_zone AS 구역, to_bin AS Bin,
+                   assigned_to AS 담당자, status AS 상태, created_at AS 생성일시
+            FROM putaway_tasks ORDER BY id DESC LIMIT 50""", conn); conn.close()
+        if df_put.empty: st.info("없음")
+        else:
+            # 상태 변경
+            open_put=[r for r in get_db().execute("SELECT id,task_number,item_name FROM putaway_tasks WHERE status='대기'").fetchall()]
+            get_db().close()
+            if open_put:
+                put_map={f"{r['task_number']}-{r['item_name']}":r['id'] for r in open_put}
+                c1,c2=st.columns(2); sel_put=c1.selectbox("완료처리",list(put_map.keys())); new_put_st=c2.selectbox("상태",["진행중","완료"])
+                if st.button("🔄 상태 변경",use_container_width=True):
+                    conn=get_db(); conn.execute("UPDATE putaway_tasks SET status=? WHERE id=?",(new_put_st,put_map[sel_put]))
+                    conn.commit(); conn.close(); st.rerun()
+            st.dataframe(df_put, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("📋 Putaway 규칙 목록")
+        conn=get_db(); df_par=pd.read_sql_query("""
+            SELECT item_name AS 품목, item_category AS 카테고리,
+                   preferred_zone AS 구역, preferred_bin AS Bin,
+                   rule_type AS 규칙유형, priority AS 우선순위
+            FROM putaway_rules ORDER BY priority""", conn); conn.close()
+        if not df_par.empty: st.dataframe(df_par, use_container_width=True, hide_index=True)
+
+
+# ══ 피킹 웨이브 관리 ══════════════════════════════════════════
+with tabs["wave"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS pick_waves (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wave_number TEXT UNIQUE,
+            wave_date TEXT,
+            wave_type TEXT DEFAULT '배치',
+            picker TEXT,
+            total_lines INTEGER DEFAULT 0,
+            picked_lines INTEGER DEFAULT 0,
+            status TEXT DEFAULT '대기',
+            note TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS pick_wave_lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wave_id INTEGER,
+            delivery_id INTEGER,
+            item_name TEXT, bin_location TEXT,
+            required_qty INTEGER DEFAULT 0,
+            picked_qty INTEGER DEFAULT 0,
+            status TEXT DEFAULT '대기',
+            FOREIGN KEY(wave_id) REFERENCES pick_waves(id))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    st.subheader("🌊 피킹 웨이브 관리")
+    st.caption("복수 출하건을 묶어 최적 동선으로 일괄 피킹")
+
+    col_form, col_list = st.columns([1,2])
+    with col_form:
+        st.subheader("웨이브 생성")
+        conn=get_db()
+        pend_deli=[r for r in conn.execute("SELECT id,delivery_number,item_name,delivery_qty FROM deliveries WHERE status IN ('출하준비','피킹대기') ORDER BY delivery_date").fetchall()]
+        conn.close()
+        if not pend_deli:
+            st.info("피킹 대기 출하 없음")
+        else:
+            deli_opts={f"{r['delivery_number']}-{r['item_name']}({r['delivery_qty']})":r for r in pend_deli}
+            sel_delis=st.multiselect("출하건 선택 (복수)",list(deli_opts.keys()))
+            a,b=st.columns(2)
+            wave_type=a.selectbox("웨이브 유형",["배치피킹","존피킹","싱글피킹","클러스터피킹"])
+            picker=b.text_input("피커")
+            wave_date=st.date_input("피킹일",value=date.today())
+            if st.button("🌊 웨이브 생성",use_container_width=True,type="primary"):
+                if not sel_delis: st.error("출하건 선택 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        wnum=gen_number("WV")
+                        conn.execute("INSERT INTO pick_waves(wave_number,wave_date,wave_type,picker,total_lines,status) VALUES(?,?,?,?,?,?)",
+                            (wnum,str(wave_date),wave_type,picker,len(sel_delis),"대기"))
+                        wid=conn.execute("SELECT id FROM pick_waves WHERE wave_number=?",(wnum,)).fetchone()[0]
+                        for sk in sel_delis:
+                            d=deli_opts[sk]
+                            # bin 위치 조회
+                            bin_loc=conn.execute("SELECT bin_code FROM inventory i JOIN storage_bins sb ON i.bin_id=sb.id WHERE i.item_name=? LIMIT 1",(d['item_name'],)).fetchone()
+                            conn.execute("INSERT INTO pick_wave_lines(wave_id,delivery_id,item_name,bin_location,required_qty) VALUES(?,?,?,?,?)",
+                                (wid,d['id'],d['item_name'],bin_loc[0] if bin_loc else "미지정",d['delivery_qty']))
+                            conn.execute("UPDATE deliveries SET status='피킹중' WHERE id=?",(d['id'],))
+                        conn.commit(); conn.close(); st.success(f"웨이브 {wnum} 생성! ({len(sel_delis)}건)"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+
+    with col_list:
+        st.subheader("웨이브 현황")
+        conn=get_db(); df_wv=pd.read_sql_query("""
+            SELECT w.wave_number AS 웨이브번호, w.wave_date AS 피킹일,
+                   w.wave_type AS 유형, w.picker AS 피커,
+                   w.total_lines AS 전체, w.picked_lines AS 완료,
+                   ROUND(w.picked_lines*100.0/MAX(w.total_lines,1),1) AS 진척률,
+                   w.status AS 상태
+            FROM pick_waves w ORDER BY w.id DESC LIMIT 30""", conn)
+        conn.close()
+        if df_wv.empty: st.info("없음")
+        else:
+            st.dataframe(df_wv, use_container_width=True, hide_index=True)
+            st.divider()
+            # 웨이브 피킹 처리
+            open_waves=[r for r in get_db().execute("SELECT id,wave_number FROM pick_waves WHERE status IN ('대기','피킹중')").fetchall()]
+            get_db().close()
+            if open_waves:
+                wv_map={r['wave_number']:r['id'] for r in open_waves}
+                sel_wv=st.selectbox("웨이브 선택",list(wv_map.keys()))
+                conn=get_db(); df_wvl=pd.read_sql_query("""
+                    SELECT l.id, l.item_name AS 품목, l.bin_location AS Bin위치,
+                           l.required_qty AS 필요수량, l.picked_qty AS 피킹수량, l.status AS 상태
+                    FROM pick_wave_lines l WHERE l.wave_id=? ORDER BY l.bin_location""",(wv_map[sel_wv],),conn)
+                conn.close()
+                if not df_wvl.empty:
+                    st.dataframe(df_wvl.drop(columns=['id']),use_container_width=True,hide_index=True)
+                    if st.button("✅ 전체 피킹 완료",use_container_width=True,type="primary"):
+                        try:
+                            conn=get_db()
+                            conn.execute("UPDATE pick_wave_lines SET picked_qty=required_qty,status='완료' WHERE wave_id=?",(wv_map[sel_wv],))
+                            lines=conn.execute("SELECT COUNT(*) FROM pick_wave_lines WHERE wave_id=?",(wv_map[sel_wv],)).fetchone()[0]
+                            conn.execute("UPDATE pick_waves SET picked_lines=?,status='완료' WHERE id=?",(lines,wv_map[sel_wv]))
+                            conn.commit(); conn.close(); st.success("웨이브 피킹 완료!"); st.rerun()
+                        except Exception as e: st.error(f"오류:{e}")
