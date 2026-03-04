@@ -120,13 +120,17 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         iv_number TEXT UNIQUE NOT NULL,
         po_id INTEGER, gr_id INTEGER,
-        supplier TEXT NOT NULL,
+        supplier TEXT,
+        supplier_invoice_no TEXT,
         invoice_ref TEXT,
         po_amount REAL DEFAULT 0,
         gr_amount REAL DEFAULT 0,
-        invoice_amount REAL NOT NULL,
+        invoice_amount REAL DEFAULT 0,
         tax_amount REAL DEFAULT 0,
+        variance_amount REAL DEFAULT 0,
+        match_result TEXT DEFAULT '검토중',
         match_status TEXT DEFAULT '검증중',
+        status TEXT DEFAULT '검토중',
         note TEXT,
         created_at TEXT DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (po_id) REFERENCES purchase_orders(id),
@@ -135,16 +139,17 @@ def init_db():
 
     c.execute('''CREATE TABLE IF NOT EXISTS supplier_evaluations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        eval_number TEXT UNIQUE NOT NULL,
+        eval_number TEXT,
         supplier_id INTEGER,
         eval_period TEXT,
+        evaluation_period TEXT,
         delivery_score REAL DEFAULT 0,
         quality_score REAL DEFAULT 0,
         price_score REAL DEFAULT 0,
         service_score REAL DEFAULT 0,
         total_score REAL DEFAULT 0,
         grade TEXT,
-        evaluator TEXT, note TEXT,
+        evaluator TEXT, note TEXT, comment TEXT,
         created_at TEXT DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
     )''')
@@ -680,17 +685,23 @@ def init_mm_extended_db():
     # 세금계산서 (공급사→우리 회사 수취분)
     c.execute('''CREATE TABLE IF NOT EXISTS purchase_tax_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tax_inv_number TEXT UNIQUE NOT NULL,
+        ti_number TEXT,
+        tax_inv_number TEXT,
         iv_id INTEGER,
         po_id INTEGER,
         gr_id INTEGER,
-        supplier TEXT NOT NULL,
-        supply_amount REAL NOT NULL,
-        tax_amount REAL NOT NULL,
-        total_amount REAL NOT NULL,
+        supplier_id INTEGER,
+        supplier TEXT,
+        supplier_name TEXT,
+        tax_invoice_no TEXT,
+        supply_amount REAL DEFAULT 0,
+        tax_amount REAL DEFAULT 0,
+        total_amount REAL DEFAULT 0,
         issue_date TEXT,
         due_date TEXT,
-        payment_status TEXT DEFAULT '미결',
+        payment_terms TEXT DEFAULT '30일',
+        payment_method TEXT DEFAULT '계좌이체',
+        payment_status TEXT DEFAULT '미지급',
         paid_at TEXT,
         note TEXT,
         created_at TEXT DEFAULT (datetime('now','localtime')),
@@ -701,14 +712,16 @@ def init_mm_extended_db():
     # 지급 스케줄
     c.execute('''CREATE TABLE IF NOT EXISTS payment_schedule (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        schedule_number TEXT UNIQUE NOT NULL,
+        schedule_number TEXT,
+        ti_number TEXT,
         tax_inv_id INTEGER,
-        supplier TEXT NOT NULL,
+        supplier TEXT,
+        supplier_name TEXT,
         payment_amount REAL NOT NULL,
         currency TEXT DEFAULT 'KRW',
         due_date TEXT NOT NULL,
         payment_method TEXT DEFAULT '계좌이체',
-        status TEXT DEFAULT '예정',
+        status TEXT DEFAULT '미지급',
         paid_at TEXT,
         note TEXT,
         created_at TEXT DEFAULT (datetime('now','localtime')),
@@ -725,6 +738,128 @@ def init_mm_extended_db():
         last_gr_date TEXT,
         updated_at TEXT DEFAULT (datetime('now','localtime')),
         FOREIGN KEY (po_id) REFERENCES purchase_orders(id)
+    )''')
+
+    conn.commit()
+    conn.close()
+
+def init_mm_extra_db():
+    """MM 추가 테이블 - 대체자재, RTV, 이동평균단가, 블랭킷PO, 품의서"""
+    conn = get_db()
+    c = conn.cursor()
+
+    # 대체자재
+    c.execute('''CREATE TABLE IF NOT EXISTS alternative_materials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        material_id INTEGER,
+        alt_material_id INTEGER,
+        alt_material_code TEXT,
+        alt_material_name TEXT,
+        conversion_factor REAL DEFAULT 1.0,
+        priority INTEGER DEFAULT 1,
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (material_id) REFERENCES materials(id)
+    )''')
+
+    # 공급사 반품 (Return to Vendor)
+    c.execute('''CREATE TABLE IF NOT EXISTS return_to_vendor (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rtv_number TEXT UNIQUE NOT NULL,
+        gr_id INTEGER,
+        po_id INTEGER,
+        supplier_id INTEGER,
+        item_name TEXT NOT NULL,
+        return_qty INTEGER NOT NULL,
+        reason TEXT,
+        defect_type TEXT,
+        return_type TEXT DEFAULT '반품',
+        credit_note_amount REAL DEFAULT 0,
+        status TEXT DEFAULT '반품요청',
+        approved_by TEXT,
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (gr_id) REFERENCES goods_receipts(id),
+        FOREIGN KEY (po_id) REFERENCES purchase_orders(id),
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    )''')
+
+    # 이동평균단가 이력
+    c.execute('''CREATE TABLE IF NOT EXISTS moving_avg_price (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_code TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        prev_qty INTEGER DEFAULT 0,
+        prev_avg_price REAL DEFAULT 0,
+        incoming_qty INTEGER NOT NULL,
+        incoming_price REAL NOT NULL,
+        new_qty INTEGER NOT NULL,
+        new_avg_price REAL NOT NULL,
+        reference TEXT,
+        calculated_at TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+
+    # 블랭킷 PO (한도계약)
+    c.execute('''CREATE TABLE IF NOT EXISTS blanket_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        blanket_number TEXT UNIQUE NOT NULL,
+        supplier_id INTEGER,
+        item_name TEXT NOT NULL,
+        total_limit_amount REAL NOT NULL,
+        used_amount REAL DEFAULT 0,
+        remaining_amount REAL NOT NULL,
+        currency TEXT DEFAULT 'KRW',
+        unit_price REAL DEFAULT 0,
+        start_date TEXT,
+        end_date TEXT,
+        status TEXT DEFAULT '유효',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+    )''')
+
+    # 블랭킷 PO 사용이력
+    c.execute('''CREATE TABLE IF NOT EXISTS blanket_order_releases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        blanket_id INTEGER,
+        po_id INTEGER,
+        release_qty INTEGER NOT NULL,
+        release_amount REAL NOT NULL,
+        release_date TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (blanket_id) REFERENCES blanket_orders(id),
+        FOREIGN KEY (po_id) REFERENCES purchase_orders(id)
+    )''')
+
+    # 구매 품의서 (다단계 결재)
+    c.execute('''CREATE TABLE IF NOT EXISTS purchase_approvals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        approval_number TEXT UNIQUE NOT NULL,
+        pr_id INTEGER,
+        title TEXT NOT NULL,
+        requester TEXT NOT NULL,
+        department TEXT,
+        item_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        estimated_amount REAL DEFAULT 0,
+        reason TEXT,
+        contract_type TEXT DEFAULT '경쟁입찰',
+        sole_source_reason TEXT,
+        step1_approver TEXT,
+        step1_status TEXT DEFAULT '대기',
+        step1_comment TEXT,
+        step1_at TEXT,
+        step2_approver TEXT,
+        step2_status TEXT DEFAULT '대기',
+        step2_comment TEXT,
+        step2_at TEXT,
+        step3_approver TEXT,
+        step3_status TEXT DEFAULT '대기',
+        step3_comment TEXT,
+        step3_at TEXT,
+        final_status TEXT DEFAULT '검토중',
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        FOREIGN KEY (pr_id) REFERENCES purchase_requests(id)
     )''')
 
     conn.commit()
