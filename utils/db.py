@@ -638,6 +638,145 @@ def init_trade_db():
             (agreement_name,partner_country,hs_code,preferential_rate,origin_criteria)
             VALUES(?,?,?,?,?)""", row)
 
+    # 포워더 마스터
+    c.execute('''CREATE TABLE IF NOT EXISTS forwarders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        forwarder_code TEXT UNIQUE NOT NULL,
+        forwarder_name TEXT NOT NULL,
+        contact TEXT, phone TEXT, email TEXT,
+        country TEXT, region TEXT,
+        transport_modes TEXT,
+        rating REAL DEFAULT 0,
+        status TEXT DEFAULT '활성',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 수출용 포장명세서
+    c.execute('''CREATE TABLE IF NOT EXISTS export_packing_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        epl_number TEXT UNIQUE NOT NULL,
+        export_decl_id INTEGER,
+        ci_id INTEGER,
+        shipper TEXT, consignee TEXT,
+        item_name TEXT NOT NULL,
+        total_boxes INTEGER DEFAULT 1,
+        qty_per_box INTEGER DEFAULT 1,
+        total_qty INTEGER DEFAULT 1,
+        gross_weight REAL DEFAULT 0,
+        net_weight REAL DEFAULT 0,
+        dimensions TEXT,
+        marks TEXT,
+        port_of_loading TEXT, port_of_discharge TEXT,
+        vessel_name TEXT, bl_number TEXT,
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 관세 납부 관리
+    c.execute('''CREATE TABLE IF NOT EXISTS customs_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payment_number TEXT UNIQUE NOT NULL,
+        import_decl_id INTEGER,
+        decl_number TEXT,
+        item_name TEXT,
+        duty_amount REAL DEFAULT 0,
+        vat_amount REAL DEFAULT 0,
+        other_tax REAL DEFAULT 0,
+        total_amount REAL DEFAULT 0,
+        due_date TEXT,
+        paid_date TEXT,
+        payment_method TEXT DEFAULT '계좌이체',
+        bank_ref TEXT,
+        installment INTEGER DEFAULT 0,
+        installment_seq INTEGER DEFAULT 1,
+        status TEXT DEFAULT '미납',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 컨테이너 관리
+    c.execute('''CREATE TABLE IF NOT EXISTS containers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        container_number TEXT UNIQUE NOT NULL,
+        container_type TEXT DEFAULT '20GP',
+        bl_id INTEGER,
+        forwarder_id INTEGER,
+        seal_number TEXT,
+        origin_port TEXT, dest_port TEXT,
+        etd TEXT, eta TEXT,
+        atd TEXT, ata TEXT,
+        free_days INTEGER DEFAULT 14,
+        demurrage_rate REAL DEFAULT 0,
+        return_deadline TEXT,
+        status TEXT DEFAULT '예약',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 운송 타임라인 이벤트
+    c.execute('''CREATE TABLE IF NOT EXISTS shipment_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bl_id INTEGER,
+        container_id INTEGER,
+        event_type TEXT NOT NULL,
+        event_date TEXT NOT NULL,
+        location TEXT,
+        description TEXT,
+        source TEXT DEFAULT '수동',
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 무역 결제 (T/T, D/A, D/P)
+    c.execute('''CREATE TABLE IF NOT EXISTS trade_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payment_number TEXT UNIQUE NOT NULL,
+        payment_type TEXT DEFAULT 'T/T',
+        direction TEXT DEFAULT '수입',
+        ci_id INTEGER,
+        counterpart TEXT,
+        currency TEXT DEFAULT 'USD',
+        amount REAL DEFAULT 0,
+        exchange_rate REAL DEFAULT 1,
+        krw_amount REAL DEFAULT 0,
+        due_date TEXT,
+        paid_date TEXT,
+        bank_ref TEXT,
+        bank_name TEXT,
+        status TEXT DEFAULT '미결제',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 수출 환급금 관리
+    c.execute('''CREATE TABLE IF NOT EXISTS export_refunds (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        refund_number TEXT UNIQUE NOT NULL,
+        export_decl_id INTEGER,
+        decl_number TEXT,
+        item_name TEXT,
+        hs_code TEXT,
+        export_qty REAL DEFAULT 0,
+        paid_duty REAL DEFAULT 0,
+        refund_rate REAL DEFAULT 100,
+        refund_amount REAL DEFAULT 0,
+        apply_date TEXT,
+        receive_date TEXT,
+        customs_ref TEXT,
+        status TEXT DEFAULT '신청예정',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
+    # 무역보험
+    c.execute('''CREATE TABLE IF NOT EXISTS trade_insurance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        insurance_number TEXT UNIQUE NOT NULL,
+        insurance_type TEXT DEFAULT '수출보험',
+        insurer TEXT DEFAULT '한국무역보험공사',
+        insured TEXT,
+        coverage_amount REAL DEFAULT 0,
+        currency TEXT DEFAULT 'USD',
+        premium REAL DEFAULT 0,
+        start_date TEXT, end_date TEXT,
+        claim_amount REAL DEFAULT 0,
+        status TEXT DEFAULT '유효',
+        note TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime')))''')
+
     conn.commit()
     conn.close()
 

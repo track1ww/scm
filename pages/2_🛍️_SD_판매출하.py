@@ -3,6 +3,7 @@ import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.db import get_db, gen_number
+from utils.design import inject_css, apply_plotly_theme
 from datetime import datetime, timedelta, date
 
 def _add_col(table, col, col_type="TEXT"):
@@ -42,21 +43,24 @@ _add_col("customers","tax_number"); _add_col("customers","region")
 
 st.title("🛍️ SD – Sales & Distribution (판매/출하/청구)")
 
-main_tabs = st.tabs(["👥 고객·가격", "📋 수주 프로세스", "🚚 출하·배송", "💰 청구·채권", "📊 영업 분석"])
+main_tabs = st.tabs(["👥 고객·가격", "📋 수주 프로세스", "🚚 출하·배송", "💰 청구·채권", "👤 영업관리", "📊 영업 분석"])
 tabs = {}
 with main_tabs[0]:
-    s = st.tabs(["👥 고객 마스터", "💲 가격 조건표", "📊 고객 분석"])
-    tabs.update({"cust":s[0],"price":s[1],"bi_cust":s[2]})
+    s = st.tabs(["👥 고객 마스터", "💳 신용한도 관리", "💲 가격 조건표", "📊 고객 분석"])
+    tabs.update({"cust":s[0],"credit":s[1],"price":s[2],"bi_cust":s[3]})
 with main_tabs[1]:
-    s = st.tabs(["💬 고객 견적", "📋 판매주문(SO)", "🔄 SO 상태관리", "🔗 PP 생산연동", "📊 수주 분석"])
-    tabs.update({"sdq":s[0],"so":s[1],"so_st":s[2],"so_pp":s[3],"bi_so":s[4]})
+    s = st.tabs(["💬 고객 견적", "📋 판매주문(SO)", "✅ ATP 가용확인", "🔄 SO 상태관리", "🔗 PP 생산연동", "📊 수주 분석"])
+    tabs.update({"sdq":s[0],"so":s[1],"atp":s[2],"so_st":s[3],"so_pp":s[4],"bi_so":s[5]})
 with main_tabs[2]:
-    s = st.tabs(["🚚 출하/피킹", "📦 부분출하 관리", "🔍 배송 추적", "↩️ 반품", "📦 포장명세서", "📊 출하 분석"])
-    tabs.update({"deli":s[0],"partial":s[1],"track":s[2],"ret":s[3],"packing":s[4],"bi_del":s[5]})
+    s = st.tabs(["🚚 출하/피킹", "📦 부분출하 관리", "🔍 배송 추적", "📅 납기약속(CRD)", "↩️ 반품", "📦 포장명세서", "🔧 AS 접수", "📊 출하 분석"])
+    tabs.update({"deli":s[0],"partial":s[1],"track":s[2],"crd":s[3],"ret":s[4],"packing":s[5],"as_":s[6],"bi_del":s[7]})
 with main_tabs[3]:
-    s = st.tabs(["🧾 청구서", "🧾 매출세금계산서", "💳 수금 관리", "📋 채권 Aging", "📊 청구 분석"])
-    tabs.update({"inv":s[0],"sti":s[1],"ar":s[2],"aging":s[3],"bi_ar":s[4]})
+    s = st.tabs(["🧾 청구서", "🧾 매출세금계산서", "💳 수금 관리", "💵 선수금 관리", "📋 채권 Aging", "📊 청구 분석"])
+    tabs.update({"inv":s[0],"sti":s[1],"ar":s[2],"prepay":s[3],"aging":s[4],"bi_ar":s[5]})
 with main_tabs[4]:
+    s = st.tabs(["👤 영업사원 관리", "📊 영업사원 실적"])
+    tabs.update({"sales_mgr":s[0],"bi_sales_rep":s[1]})
+with main_tabs[5]:
     s = st.tabs(["🎯 매출 목표관리", "📈 매출 추이", "🏆 고객·품목", "↩️ 반품 분석", "💹 수익성"])
     tabs.update({"bi_target":s[0],"bi_sales":s[1],"bi_item":s[2],"bi_ret":s[3],"bi_profit":s[4]})
 
@@ -854,3 +858,436 @@ with tabs["bi_target"]:
                 st.plotly_chart(fig,use_container_width=True)
                 st.dataframe(df_merge[['ym','목표금액','실적금액','달성률%']].rename(columns={'ym':'월'}),
                              use_container_width=True,hide_index=True)
+
+# ══ 고객 신용한도 관리 ══════════════════════════════════════════
+with tabs["credit"]:
+    def _acd_sd(t,c,ct="TEXT"):
+        try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
+        except: pass
+    _acd_sd("customers","credit_limit","REAL DEFAULT 0")
+    _acd_sd("customers","credit_used","REAL DEFAULT 0")
+    _acd_sd("customers","credit_status","TEXT DEFAULT '정상'")
+    _acd_sd("customers","payment_terms","TEXT DEFAULT 'NET30'")
+    _acd_sd("sales_orders","sales_rep","TEXT")
+
+    st.subheader("💳 고객 신용한도 관리")
+    col_set, col_mon = st.columns([1, 2])
+    with col_set:
+        st.subheader("신용한도 설정")
+        conn=get_db()
+        custs=[r for r in conn.execute("SELECT id,customer_name,credit_limit,credit_used,payment_terms FROM customers ORDER BY customer_name").fetchall()]
+        conn.close()
+        if not custs: st.info("고객 없음")
+        else:
+            cmap={r['customer_name']:r for r in custs}
+            sel_c=st.selectbox("고객 선택",list(cmap.keys()))
+            cd=cmap[sel_c]
+            with st.form("credit_f"):
+                a,b=st.columns(2)
+                lim=a.number_input("신용한도(₩)",min_value=0.0,value=float(cd['credit_limit'] or 0),format="%.0f",step=1000000.0)
+                terms=b.selectbox("결제조건",["NET30","NET60","NET90","현금","선불","기타"],
+                    index=["NET30","NET60","NET90","현금","선불","기타"].index(cd['payment_terms']) if cd['payment_terms'] in ["NET30","NET60","NET90","현금","선불","기타"] else 0)
+                if st.form_submit_button("✅ 저장",use_container_width=True):
+                    conn=get_db(); conn.execute("UPDATE customers SET credit_limit=?,payment_terms=? WHERE id=?",(lim,terms,cd['id']))
+                    conn.commit(); conn.close(); st.success("저장!"); st.rerun()
+
+        if st.button("🔄 신용 사용액 재계산",use_container_width=True):
+            conn=get_db()
+            for c2 in custs:
+                used=conn.execute("SELECT COALESCE(SUM(quantity*unit_price*(1-discount_rate/100)),0) FROM sales_orders WHERE customer_name=? AND status NOT IN ('취소','배송완료')",(c2['customer_name'],)).fetchone()[0]
+                status_cr="초과" if used>(c2['credit_limit'] or 0) and (c2['credit_limit'] or 0)>0 else ("경고" if used>(c2['credit_limit'] or 0)*0.8 and (c2['credit_limit'] or 0)>0 else "정상")
+                conn.execute("UPDATE customers SET credit_used=?,credit_status=? WHERE id=?",(used,status_cr,c2['id']))
+            conn.commit(); conn.close(); st.success("재계산 완료!"); st.rerun()
+
+    with col_mon:
+        st.subheader("📊 신용 현황 모니터링")
+        conn=get_db(); df_cr=pd.read_sql_query("""
+            SELECT customer_name AS 고객, credit_limit AS 한도,
+                   credit_used AS 사용액,
+                   ROUND(credit_used*100.0/MAX(credit_limit,1),1) AS 사용률,
+                   credit_limit-credit_used AS 잔여한도,
+                   payment_terms AS 결제조건,
+                   CASE credit_status WHEN '초과' THEN '🔴 초과' WHEN '경고' THEN '🟠 경고' ELSE '🟢 정상' END AS 상태
+            FROM customers WHERE credit_limit>0 ORDER BY 사용률 DESC""", conn); conn.close()
+        if df_cr.empty: st.info("신용한도 설정된 고객 없음")
+        else:
+            over=df_cr[df_cr['상태'].str.contains('초과')]
+            warn=df_cr[df_cr['상태'].str.contains('경고')]
+            if not over.empty: st.error(f"🚨 신용 초과: {len(over)}개사")
+            if not warn.empty: st.warning(f"⚠️ 신용 경고(80% 이상): {len(warn)}개사")
+            st.dataframe(df_cr, use_container_width=True, hide_index=True)
+            try:
+                import plotly.express as px
+                fig=px.bar(df_cr,x='고객',y=['한도','사용액'],barmode='overlay',
+                    title="고객별 신용한도 현황",color_discrete_map={'한도':'#cbd5e1','사용액':'#3b82f6'})
+                fig.update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0))
+                st.plotly_chart(fig,use_container_width=True)
+            except: pass
+
+
+# ══ ATP 가용재고 확인 ══════════════════════════════════════════
+with tabs["atp"]:
+    st.subheader("✅ ATP — Available to Promise (납기 약속 가능 확인)")
+    st.caption("판매주문 등록 전 재고·생산계획 기준으로 납기 약속 가능 여부 자동 계산")
+    col_l, col_r = st.columns([1, 2])
+    with col_l:
+        item_atp=st.text_input("품목명 *")
+        req_qty=st.number_input("요청 수량",min_value=1,value=1)
+        req_date=st.date_input("요청 납기",value=date.today()+timedelta(days=14))
+        if st.button("🔍 ATP 확인",use_container_width=True,type="primary"):
+            if not item_atp: st.error("품목명 필수")
+            else:
+                conn=get_db()
+                # 현재 가용재고
+                stock=conn.execute("SELECT COALESCE(SUM(stock_qty),0) FROM inventory WHERE item_name LIKE ?",(f"%{item_atp}%",)).fetchone()[0]
+                # 미출하 주문 예약 수량
+                reserved=conn.execute("SELECT COALESCE(SUM(quantity-COALESCE(shipped_qty,0)),0) FROM sales_orders WHERE item_name LIKE ? AND status NOT IN ('취소','배송완료')",(f"%{item_atp}%",)).fetchone()[0]
+                # 납기일 이전 생산완료 예정
+                planned=conn.execute("SELECT COALESCE(SUM(planned_qty),0) FROM production_plans WHERE product_name LIKE ? AND end_date<=? AND status NOT IN ('취소')",(f"%{item_atp}%",str(req_date))).fetchone()[0]
+                conn.close()
+                available=stock-reserved+planned
+                can_promise=available>=req_qty
+                st.divider()
+                c1,c2,c3=st.columns(3)
+                c1.metric("현재고",f"{stock:,}")
+                c2.metric("예약수량",f"-{reserved:,}")
+                c3.metric("생산예정",f"+{planned:,}")
+                st.metric("ATP 가용수량",f"{available:,}",delta=f"{'✅ 납기약속 가능' if can_promise else '❌ 납기약속 불가'}", delta_color="normal" if can_promise else "inverse")
+                if can_promise: st.success(f"✅ {req_qty:,}개 → {req_date} 납기 약속 가능")
+                else:
+                    shortage=req_qty-available
+                    st.error(f"❌ {shortage:,}개 부족 — 납기 재조정 필요")
+                    # 가능한 최초 납기 계산
+                    conn=get_db()
+                    next_pp=conn.execute("SELECT end_date,planned_qty FROM production_plans WHERE product_name LIKE ? AND status NOT IN ('취소') ORDER BY end_date",(f"%{item_atp}%",)).fetchall()
+                    conn.close()
+                    if next_pp: st.info(f"💡 가장 빠른 생산완료: {next_pp[0]['end_date']} ({next_pp[0]['planned_qty']:,}개)")
+
+    with col_r:
+        st.subheader("품목별 ATP 현황")
+        conn=get_db(); df_atp=pd.read_sql_query("""
+            SELECT i.item_name AS 품목,
+                   COALESCE(i.stock_qty,0) AS 현재고,
+                   COALESCE(so_res.reserved,0) AS 예약수량,
+                   COALESCE(pp_plan.planned,0) AS 생산예정,
+                   COALESCE(i.stock_qty,0)-COALESCE(so_res.reserved,0)+COALESCE(pp_plan.planned,0) AS ATP수량
+            FROM inventory i
+            LEFT JOIN (SELECT item_name, SUM(quantity-COALESCE(shipped_qty,0)) AS reserved
+                       FROM sales_orders WHERE status NOT IN ('취소','배송완료') GROUP BY item_name) so_res ON i.item_name=so_res.item_name
+            LEFT JOIN (SELECT product_name, SUM(planned_qty) AS planned
+                       FROM production_plans WHERE status NOT IN ('취소') GROUP BY product_name) pp_plan ON i.item_name=pp_plan.product_name
+            WHERE i.stock_qty>0 OR so_res.reserved>0
+            ORDER BY ATP수량""", conn); conn.close()
+        if df_atp.empty: st.info("재고 없음")
+        else:
+            def atp_c(r): return ['background-color:#fee2e2']*len(r) if r['ATP수량']<0 else (['background-color:#fef3c7']*len(r) if r['ATP수량']<10 else ['']*len(r))
+            st.dataframe(df_atp.style.apply(atp_c,axis=1), use_container_width=True, hide_index=True)
+
+
+# ══ 납기약속(CRD) 관리 ══════════════════════════════════════════
+with tabs["crd"]:
+    _acd_sd("sales_orders","confirmed_delivery_date","TEXT")
+    _acd_sd("sales_orders","actual_delivery_date","TEXT")
+
+    st.subheader("📅 납기약속(CRD) — Customer Required Date 관리")
+    col_l, col_r = st.columns([1, 2])
+    with col_l:
+        st.subheader("확정납기 등록")
+        conn=get_db()
+        open_so=[r for r in conn.execute("""SELECT id,order_number,customer_name,item_name,quantity,requested_delivery,confirmed_delivery_date
+            FROM sales_orders WHERE status NOT IN ('취소','배송완료') ORDER BY requested_delivery""").fetchall()]
+        conn.close()
+        if not open_so: st.info("진행중 SO 없음")
+        else:
+            so_m={f"{r['order_number']}-{r['customer_name']}/{r['item_name']}":r for r in open_so}
+            sel_crd=st.selectbox("SO 선택",list(so_m.keys()))
+            sd=so_m[sel_crd]
+            a,b=st.columns(2)
+            req_d=a.text_input("요청납기",value=sd['requested_delivery'] or '-',disabled=True)
+            conf_d=b.date_input("확정납기",value=date.today()+timedelta(days=7))
+            act_d=st.date_input("실제납기(완료시)",value=date.today())
+            note_crd=st.text_input("비고")
+            if st.button("✅ 납기 확정",use_container_width=True):
+                conn=get_db(); conn.execute("UPDATE sales_orders SET confirmed_delivery_date=?,actual_delivery_date=? WHERE id=?",(str(conf_d),str(act_d) if sd['status'] in ['배송완료'] else None,sd['id']))
+                conn.commit(); conn.close(); st.success("납기 확정!"); st.rerun()
+    with col_r:
+        st.subheader("납기 달성률 현황")
+        conn=get_db(); df_crd=pd.read_sql_query("""
+            SELECT order_number AS SO번호, customer_name AS 고객, item_name AS 품목,
+                   requested_delivery AS 요청납기, confirmed_delivery_date AS 확정납기,
+                   actual_delivery_date AS 실납기,
+                   CASE
+                     WHEN actual_delivery_date IS NOT NULL AND actual_delivery_date<=requested_delivery THEN '✅ 준수'
+                     WHEN actual_delivery_date IS NOT NULL AND actual_delivery_date>requested_delivery THEN '❌ 지연'
+                     WHEN confirmed_delivery_date<=date('now') AND status NOT IN ('배송완료') THEN '⚠️ 지연위험'
+                     ELSE '🔄 진행중'
+                   END AS 납기상태,
+                   status AS SO상태
+            FROM sales_orders WHERE status NOT IN ('취소')
+            ORDER BY requested_delivery""", conn); conn.close()
+        if df_crd.empty: st.info("없음")
+        else:
+            total=len(df_crd[df_crd['실납기'].notna()])
+            on_time=len(df_crd[df_crd['납기상태']=='✅ 준수'])
+            rate=round(on_time/max(total,1)*100,1)
+            c1,c2,c3=st.columns(3)
+            c1.metric("납기준수율",f"{rate}%",delta="목표 95%" if rate>=95 else "개선필요",delta_color="normal" if rate>=95 else "inverse")
+            c2.metric("준수",f"{on_time}건")
+            c3.metric("지연",f"{len(df_crd[df_crd['납기상태']=='❌ 지연'])}건",delta_color="inverse")
+            st.dataframe(df_crd, use_container_width=True, hide_index=True)
+
+
+# ══ 선수금 관리 ══════════════════════════════════════════
+with tabs["prepay"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS prepayments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prepay_number TEXT UNIQUE,
+            order_id INTEGER, customer_name TEXT,
+            prepay_amount REAL DEFAULT 0,
+            applied_amount REAL DEFAULT 0,
+            received_date TEXT,
+            bank_ref TEXT, note TEXT,
+            status TEXT DEFAULT '미적용',
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("💵 선수금 등록")
+        conn=get_db()
+        open_so2=[r for r in conn.execute("SELECT id,order_number,customer_name,item_name,quantity*unit_price AS total FROM sales_orders WHERE status NOT IN ('취소') ORDER BY id DESC LIMIT 30").fetchall()]
+        conn.close()
+        so_m2={f"{r['order_number']}-{r['customer_name']}(₩{r['total']:,.0f})":r for r in open_so2}
+        with st.form("pp_f", clear_on_submit=True):
+            sel_pp=st.selectbox("SO 선택 *",list(so_m2.keys()) if so_m2 else ["없음"])
+            pp_d=so_m2.get(sel_pp)
+            cust_pp=st.text_input("고객명",value=pp_d['customer_name'] if pp_d else "")
+            a,b=st.columns(2); amt_pp=a.number_input("선수금액(₩)",min_value=0.0,format="%.0f"); recv_pp=b.date_input("입금일")
+            bank_pp=st.text_input("입금 참조번호"); note_pp=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                try:
+                    conn=get_db()
+                    conn.execute("INSERT INTO prepayments(prepay_number,order_id,customer_name,prepay_amount,received_date,bank_ref,note,status) VALUES(?,?,?,?,?,?,?,?)",
+                        (gen_number("PPY"),pp_d['id'] if pp_d else None,cust_pp,amt_pp,str(recv_pp),bank_pp,note_pp,"미적용"))
+                    conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                except Exception as e: st.error(f"오류:{e}")
+
+        st.divider()
+        st.subheader("선수금 청구서 적용")
+        conn=get_db()
+        pp_unapplied=[r for r in conn.execute("SELECT id,prepay_number,customer_name,prepay_amount,applied_amount FROM prepayments WHERE status='미적용'").fetchall()]
+        conn.close()
+        if pp_unapplied:
+            pp_sel_m={f"{r['prepay_number']}-{r['customer_name']}(₩{r['prepay_amount']:,.0f})":r for r in pp_unapplied}
+            sel_ppu=st.selectbox("선수금 선택",list(pp_sel_m.keys()))
+            apply_amt=st.number_input("적용금액",min_value=0.0,format="%.0f")
+            if st.button("✅ 청구서 차감 적용",use_container_width=True):
+                r2=pp_sel_m[sel_ppu]; new_app=r2['applied_amount']+apply_amt
+                new_st="전액적용" if new_app>=r2['prepay_amount'] else "부분적용"
+                conn=get_db(); conn.execute("UPDATE prepayments SET applied_amount=?,status=? WHERE id=?",(new_app,new_st,r2['id']))
+                conn.commit(); conn.close(); st.success(f"적용 완료! (누적적용: ₩{new_app:,.0f})"); st.rerun()
+
+    with col_list:
+        st.subheader("선수금 현황")
+        conn=get_db(); df_pp=pd.read_sql_query("""
+            SELECT prepay_number AS 선수금번호, customer_name AS 고객,
+                   prepay_amount AS 선수금액, applied_amount AS 적용금액,
+                   prepay_amount-applied_amount AS 잔여선수금,
+                   received_date AS 입금일, status AS 상태
+            FROM prepayments ORDER BY id DESC""", conn); conn.close()
+        if df_pp.empty: st.info("없음")
+        else:
+            c1,c2=st.columns(2); c1.metric("미적용 선수금",f"₩{df_pp[df_pp['상태']=='미적용']['선수금액'].sum():,.0f}")
+            c2.metric("총 선수금",f"₩{df_pp['선수금액'].sum():,.0f}")
+            st.dataframe(df_pp, use_container_width=True, hide_index=True)
+
+
+# ══ AS 접수 ══════════════════════════════════════════
+with tabs["as_"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS as_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            as_number TEXT UNIQUE,
+            order_id INTEGER, customer_name TEXT,
+            item_name TEXT, delivery_number TEXT,
+            symptom TEXT, as_type TEXT DEFAULT '수리',
+            priority TEXT DEFAULT '일반',
+            assigned_to TEXT,
+            received_date TEXT, completed_date TEXT,
+            root_cause TEXT, action_taken TEXT,
+            qm_claim_linked INTEGER DEFAULT 0,
+            status TEXT DEFAULT '접수',
+            note TEXT,
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("🔧 AS 접수")
+        conn=get_db()
+        delis_as=[r for r in conn.execute("SELECT d.id,d.delivery_number,o.customer_name,d.item_name FROM deliveries d JOIN sales_orders o ON d.order_id=o.id WHERE d.status='배송완료' ORDER BY d.id DESC LIMIT 30").fetchall()]
+        conn.close()
+        dmap_as={f"{r['delivery_number']}-{r['customer_name']}/{r['item_name']}":r for r in delis_as}
+        with st.form("as_f", clear_on_submit=True):
+            sel_as=st.selectbox("출하건 선택",["직접입력"]+list(dmap_as.keys()))
+            as_d=dmap_as.get(sel_as)
+            cust_as=st.text_input("고객명",value=as_d['customer_name'] if as_d else "")
+            item_as=st.text_input("품목명",value=as_d['item_name'] if as_d else "")
+            a,b=st.columns(2); atype=a.selectbox("AS 유형",["수리","교환","반품","현장방문","원격지원"]); pri=b.selectbox("우선순위",["긴급","높음","일반","낮음"])
+            symptom=st.text_area("증상/불량내용 *",height=70)
+            assigned=st.text_input("담당자")
+            note_as=st.text_area("비고",height=40)
+            link_qm=st.checkbox("QM 클레임 연동 생성")
+            if st.form_submit_button("✅ AS 접수",use_container_width=True):
+                if not symptom: st.error("증상 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        asn=gen_number("AS")
+                        conn.execute("INSERT INTO as_requests(as_number,order_id,customer_name,item_name,delivery_number,symptom,as_type,priority,assigned_to,received_date,qm_claim_linked,status) VALUES(?,?,?,?,?,?,?,?,?,date('now'),?,?)",
+                            (asn,as_d['id'] if as_d else None,cust_as,item_as,as_d['delivery_number'] if as_d else "",symptom,atype,pri,assigned,1 if link_qm else 0,"접수"))
+                        if link_qm:
+                            conn.execute("INSERT INTO quality_inspections(inspection_number,inspection_type,item_name,lot_size,sample_qty,result,note) VALUES(?,?,?,?,?,?,?)",
+                                (gen_number("QI"),"고객클레임",item_as,1,1,"불합격",f"AS연동:{asn} / {symptom[:50]}"))
+                        conn.commit(); conn.close(); st.success(f"AS {asn} 접수!" + (" + QM 클레임 생성" if link_qm else "")); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("AS 현황")
+        conn=get_db(); df_as=pd.read_sql_query("""
+            SELECT as_number AS AS번호, customer_name AS 고객, item_name AS 품목,
+                   as_type AS 유형, priority AS 우선순위,
+                   symptom AS 증상, assigned_to AS 담당자,
+                   received_date AS 접수일, completed_date AS 완료일,
+                   status AS 상태
+            FROM as_requests ORDER BY
+            CASE priority WHEN '긴급' THEN 1 WHEN '높음' THEN 2 WHEN '일반' THEN 3 ELSE 4 END,
+            id DESC""", conn); conn.close()
+        if df_as.empty: st.info("없음")
+        else:
+            c1,c2,c3=st.columns(3)
+            c1.metric("전체",len(df_as))
+            c2.metric("긴급",len(df_as[df_as['우선순위']=='긴급']),delta_color="inverse")
+            c3.metric("완료",len(df_as[df_as['상태']=='완료']))
+            def as_c(r): return ['background-color:#fee2e2']*len(r) if r['우선순위']=='긴급' and r['상태']!='완료' else ['']*len(r)
+            st.dataframe(df_as.style.apply(as_c,axis=1), use_container_width=True, hide_index=True)
+            # 상태 변경
+            open_as=[r for r in get_db().execute("SELECT id,as_number FROM as_requests WHERE status!='완료'").fetchall()]
+            get_db().close()
+            if open_as:
+                st.divider()
+                am={r['as_number']:r['id'] for r in open_as}
+                c1,c2=st.columns(2); sel_asu=c1.selectbox("AS건",list(am.keys())); new_ast=c2.selectbox("상태",["접수","진행중","부품대기","완료","불가"])
+                action=st.text_input("처리내용")
+                if st.button("🔄 처리",use_container_width=True):
+                    conn=get_db(); conn.execute("UPDATE as_requests SET status=?,action_taken=?,completed_date=CASE ? WHEN '완료' THEN date('now') ELSE NULL END WHERE id=?",(new_ast,action,new_ast,am[sel_asu]))
+                    conn.commit(); conn.close(); st.rerun()
+
+
+# ══ 영업사원 관리 ══════════════════════════════════════════
+with tabs["sales_mgr"]:
+    try:
+        conn=get_db()
+        conn.execute('''CREATE TABLE IF NOT EXISTS sales_reps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rep_code TEXT UNIQUE,
+            rep_name TEXT NOT NULL,
+            region TEXT, team TEXT,
+            phone TEXT, email TEXT,
+            monthly_target REAL DEFAULT 0,
+            status TEXT DEFAULT '재직',
+            created_at TEXT DEFAULT (datetime('now','localtime')))''')
+        conn.commit(); conn.close()
+    except: pass
+
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("👤 영업사원 등록")
+        with st.form("rep_f", clear_on_submit=True):
+            a,b=st.columns(2); rc=a.text_input("사원코드 *"); rn=b.text_input("이름 *")
+            c,d=st.columns(2); reg=c.text_input("담당지역"); team=d.text_input("소속팀")
+            e,f=st.columns(2); phn=e.text_input("전화"); eml=f.text_input("이메일")
+            tgt=st.number_input("월간목표(₩)",min_value=0.0,format="%.0f",step=1000000.0)
+            rst=st.selectbox("상태",["재직","휴직","퇴직"])
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not rc or not rn: st.error("코드·이름 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("INSERT INTO sales_reps(rep_code,rep_name,region,team,phone,email,monthly_target,status) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(rep_code) DO UPDATE SET rep_name=excluded.rep_name,monthly_target=excluded.monthly_target",
+                            (rc,rn,reg,team,phn,eml,tgt,rst))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        conn=get_db(); df_reps=pd.read_sql_query("SELECT rep_code AS 코드,rep_name AS 이름,region AS 지역,team AS 팀,monthly_target AS 월목표,status AS 상태 FROM sales_reps ORDER BY rep_name",conn); conn.close()
+        if not df_reps.empty: st.dataframe(df_reps,use_container_width=True,hide_index=True)
+        else: st.info("없음")
+
+        st.divider()
+        st.subheader("SO에 영업사원 배정")
+        conn=get_db()
+        reps_active=[r[0] for r in conn.execute("SELECT rep_name FROM sales_reps WHERE status='재직'").fetchall()]
+        sos_norep=[r for r in conn.execute("SELECT id,order_number,customer_name,item_name FROM sales_orders WHERE (sales_rep IS NULL OR sales_rep='') AND status NOT IN ('취소') ORDER BY id DESC LIMIT 20").fetchall()]
+        conn.close()
+        if reps_active and sos_norep:
+            so_norep_m={f"{r['order_number']}-{r['customer_name']}":r['id'] for r in sos_norep}
+            c1,c2=st.columns(2); sel_norep=c1.selectbox("미배정 SO",list(so_norep_m.keys())); sel_rep=c2.selectbox("영업사원",reps_active)
+            if st.button("배정",use_container_width=True):
+                conn=get_db(); conn.execute("UPDATE sales_orders SET sales_rep=? WHERE id=?",(sel_rep,so_norep_m[sel_norep])); conn.commit(); conn.close(); st.success("배정!"); st.rerun()
+
+
+# ══ 영업사원 실적 분석 ══════════════════════════════════════════
+with tabs["bi_sales_rep"]:
+    if not HAS_PL: st.warning("pip install plotly")
+    else:
+        st.subheader("📊 영업사원별 실적 분석")
+        conn=get_db()
+        df_rep_perf=pd.read_sql_query("""
+            SELECT s.sales_rep AS 영업사원,
+                   COUNT(s.id) AS 수주건수,
+                   ROUND(SUM(s.quantity*s.unit_price*(1-s.discount_rate/100)),0) AS 매출액,
+                   ROUND(AVG(s.discount_rate),1) AS 평균할인율,
+                   COUNT(CASE WHEN s.status='배송완료' THEN 1 END) AS 완료건수,
+                   r.monthly_target AS 월목표
+            FROM sales_orders s
+            LEFT JOIN sales_reps r ON s.sales_rep=r.rep_name
+            WHERE s.sales_rep IS NOT NULL AND s.status!='취소'
+            GROUP BY s.sales_rep ORDER BY 매출액 DESC""", conn)
+        df_rep_crd=pd.read_sql_query("""
+            SELECT sales_rep AS 영업사원,
+                   COUNT(*) AS 총건,
+                   SUM(CASE WHEN actual_delivery_date<=requested_delivery AND actual_delivery_date IS NOT NULL THEN 1 ELSE 0 END) AS 납기준수
+            FROM sales_orders WHERE sales_rep IS NOT NULL AND status='배송완료'
+            GROUP BY sales_rep""", conn)
+        conn.close()
+
+        if df_rep_perf.empty: st.info("영업사원 배정된 SO 없음")
+        else:
+            df_rep_perf['달성률%']=df_rep_perf.apply(lambda r: round(r['매출액']/r['월목표']*100,1) if r['월목표']>0 else 0,axis=1)
+            c1,c2,c3=st.columns(3)
+            c1.metric("최고 매출",df_rep_perf.iloc[0]['영업사원'])
+            c2.metric("총 수주",f"{df_rep_perf['수주건수'].sum()}건")
+            c3.metric("총 매출",f"₩{df_rep_perf['매출액'].sum():,.0f}")
+
+            col_a,col_b=st.columns(2)
+            with col_a:
+                fig=px.bar(df_rep_perf,x='영업사원',y='매출액',color='달성률%',
+                    color_continuous_scale='RdYlGn',title="영업사원별 매출액",text='달성률%')
+                fig.update_traces(texttemplate='%{text:.0f}%',textposition='outside')
+                fig.update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0))
+                st.plotly_chart(fig,use_container_width=True)
+            with col_b:
+                fig2=px.scatter(df_rep_perf,x='수주건수',y='매출액',color='영업사원',
+                    size='달성률%',title="수주건수 vs 매출액",text='영업사원')
+                fig2.update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0))
+                st.plotly_chart(fig2,use_container_width=True)
+
+            st.dataframe(df_rep_perf,use_container_width=True,hide_index=True)
+            if not df_rep_crd.empty:
+                df_rep_crd['납기준수율%']=(df_rep_crd['납기준수']/df_rep_crd['총건']*100).round(1)
+                st.subheader("영업사원별 납기준수율")
+                st.dataframe(df_rep_crd,use_container_width=True,hide_index=True)

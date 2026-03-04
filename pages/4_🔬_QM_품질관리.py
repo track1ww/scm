@@ -3,6 +3,7 @@ import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.db import get_db, gen_number
+from utils.design import inject_css, apply_plotly_theme
 from datetime import datetime, timedelta, date
 
 def _ac(t,c,ct="TEXT"):

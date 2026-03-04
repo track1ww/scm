@@ -3,6 +3,7 @@ import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.db import get_db, gen_number, init_trade_db
+from utils.design import inject_css, apply_plotly_theme
 from utils.api_client import (
     get_api_keys, save_api_key,
     fetch_bok_exchange_rates, fetch_unipass_customs_rate,
@@ -23,20 +24,20 @@ st.title("🚢 TM – Transportation & Trade Management (운송/수출입 관리
 main_tm = st.tabs(["🔧 기준·설정", "📦 수출입 업무", "🚛 운송·결제", "📊 무역 분석"])
 
 with main_tm[0]:
-    sub0 = st.tabs(["🔑 API 설정", "💱 환율 관리", "📦 HS Code", "🌐 FTA 관리"])
-    tabs = {0: sub0[0], 1: sub0[1], 2: sub0[2], 3: sub0[3]}
+    sub0 = st.tabs(["🔑 API 설정", "💱 환율 관리", "📦 HS Code", "🌐 FTA 관리", "🏢 포워더 관리"])
+    tabs = {0: sub0[0], 1: sub0[1], 2: sub0[2], 3: sub0[3], "fwd": sub0[4]}
 
 with main_tm[1]:
-    sub1 = st.tabs(["📄 CI / B/L", "📥 수입신고", "📤 수출면장", "🔍 수입요건", "⚠️ 전략물자", "📜 원산지(C/O)"])
-    tabs.update({4: sub1[0], 5: sub1[1], 6: sub1[2], 8: sub1[3], 9: sub1[4], "co": sub1[5]})
+    sub1 = st.tabs(["📄 CI / B/L", "📥 수입신고", "📤 수출면장", "📦 수출 P/L", "🔍 수입요건", "⚠️ 전략물자", "📜 원산지(C/O)"])
+    tabs.update({4: sub1[0], 5: sub1[1], 6: sub1[2], "epl": sub1[3], 8: sub1[4], 9: sub1[5], "co": sub1[6]})
 
 with main_tm[2]:
-    sub2 = st.tabs(["💳 L/C 신용장", "🚛 운송오더", "💰 운임 계산"])
-    tabs.update({7: sub2[0], 10: sub2[1], "freight": sub2[2]})
+    sub2 = st.tabs(["💳 L/C 신용장", "💸 무역결제(T/T·D/A)", "🚛 운송오더", "📦 컨테이너", "🗺️ 운송 추적", "💰 운임 계산", "🛡️ 무역보험"])
+    tabs.update({7: sub2[0], "tpay": sub2[1], 10: sub2[2], "ctn": sub2[3], "track": sub2[4], "freight": sub2[5], "ins": sub2[6]})
 
 with main_tm[3]:
-    sub3 = st.tabs(["📊 수출입 현황", "💱 환율 영향 분석", "🌍 국가별 분석"])
-    tabs.update({11: sub3[0], "bi_fx": sub3[1], "bi_country": sub3[2]})
+    sub3 = st.tabs(["📊 수출입 현황", "💱 환율 영향 분석", "🌍 국가별 분석", "💴 관세 납부 관리", "🔄 수출 환급금"])
+    tabs.update({11: sub3[0], "bi_fx": sub3[1], "bi_country": sub3[2], "duty_pay": sub3[3], "refund": sub3[4]})
 
 # ── 0. API 설정 ──────────────────────────────────────
 with tabs[0]:
@@ -1257,3 +1258,485 @@ with tabs["bi_country"]:
             with col_r2:
                 if not df_imp_m.empty: st.plotly_chart(px.area(df_imp_m,x='월',y='CIF',title="수입 CIF 추이",color_discrete_sequence=['#f97316']).update_layout(height=240,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
         conn.close()
+
+# ══════════════════════════════════════════════════════
+# 포워더 관리
+# ══════════════════════════════════════════════════════
+with tabs["fwd"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("🏢 포워더 등록")
+        with st.form("fwd_f", clear_on_submit=True):
+            a,b = st.columns(2); fc=a.text_input("포워더코드 *"); fn=b.text_input("포워더명 *")
+            c,d = st.columns(2); ctt=c.text_input("담당자"); phn=d.text_input("전화")
+            eml=st.text_input("이메일")
+            e,f = st.columns(2); cntry=e.text_input("국가"); rgn=f.text_input("지역")
+            modes=st.multiselect("취급 운송방식",["해상FCL","해상LCL","항공","육상","복합"])
+            rat=st.slider("평점",0.0,5.0,3.0,0.5); fst=st.selectbox("상태",["활성","휴면","거래중지"])
+            fnote=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not fc or not fn: st.error("코드·이름 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO forwarders(forwarder_code,forwarder_name,contact,phone,email,country,region,transport_modes,rating,status,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(forwarder_code) DO UPDATE SET
+                            forwarder_name=excluded.forwarder_name,contact=excluded.contact,phone=excluded.phone,
+                            email=excluded.email,country=excluded.country,region=excluded.region,
+                            transport_modes=excluded.transport_modes,rating=excluded.rating,status=excluded.status""",(
+                            fc,fn,ctt,phn,eml,cntry,rgn,",".join(modes),rat,fst,fnote))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("포워더 목록")
+        conn=get_db(); df_fwd=pd.read_sql_query("""
+            SELECT forwarder_code AS 코드, forwarder_name AS 포워더명, contact AS 담당자,
+                   country AS 국가, transport_modes AS 운송방식, rating AS 평점, status AS 상태
+            FROM forwarders ORDER BY rating DESC""", conn); conn.close()
+        if df_fwd.empty: st.info("없음")
+        else: st.dataframe(df_fwd, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("📊 포워더 실적 분석")
+        conn=get_db()
+        df_fwd_perf=pd.read_sql_query("""
+            SELECT f.forwarder_name AS 포워더, fo.transport_mode AS 방식,
+                   COUNT(fo.id) AS 운송건수,
+                   ROUND(AVG(fo.freight_cost),0) AS 평균운임,
+                   SUM(fo.freight_cost) AS 총운임
+            FROM freight_orders fo
+            JOIN forwarders f ON fo.carrier=f.forwarder_name
+            GROUP BY f.forwarder_name, fo.transport_mode
+            ORDER BY 총운임 DESC""", conn); conn.close()
+        if df_fwd_perf.empty: st.info("운송 실적 없음")
+        else:
+            try:
+                import plotly.express as px
+                st.plotly_chart(px.bar(df_fwd_perf,x='포워더',y='총운임',color='방식',
+                    title="포워더별 운임 실적").update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0)),
+                    use_container_width=True)
+            except: pass
+            st.dataframe(df_fwd_perf, use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════
+# 수출용 포장명세서 (Export Packing List)
+# ══════════════════════════════════════════════════════
+with tabs["epl"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("📦 수출 포장명세서 등록")
+        conn=get_db()
+        exps_epl=[r for r in conn.execute("SELECT id,decl_number,item_name FROM export_declarations ORDER BY id DESC LIMIT 30").fetchall()]
+        cis_epl=[r for r in conn.execute("SELECT id,ci_number,item_name FROM commercial_invoices ORDER BY id DESC LIMIT 30").fetchall()]
+        conn.close()
+        emap={f"{r['decl_number']}-{r['item_name']}":r['id'] for r in exps_epl}
+        cmap={f"{r['ci_number']}-{r['item_name']}":r['id'] for r in cis_epl}
+        with st.form("epl_f", clear_on_submit=True):
+            exp_sel=st.selectbox("수출면장",["없음"]+list(emap.keys()))
+            ci_sel_epl=st.selectbox("상업송장(CI)",["없음"]+list(cmap.keys()))
+            a,b=st.columns(2); shpr=a.text_input("송하인(Shipper) *"); csgn=b.text_input("수하인(Consignee) *")
+            item_epl=st.text_input("품목명 *")
+            c,d,e=st.columns(3); tbox=c.number_input("총 박스수",min_value=1,value=1); qpb=d.number_input("박스당 수량",min_value=1,value=1); ubox=e.selectbox("단위",["EA","KG","MT","L","SET"])
+            f2,g2=st.columns(2); gw=f2.number_input("총중량 G.W(kg)",min_value=0.0,format="%.2f"); nw=g2.number_input("순중량 N.W(kg)",min_value=0.0,format="%.2f")
+            dims=st.text_input("박스 치수 (L×W×H cm)")
+            marks=st.text_area("화인 (Shipping Marks)",height=60)
+            h2,i2=st.columns(2); pol=h2.text_input("선적항(POL)"); pod=i2.text_input("목적항(POD)")
+            j2,k2=st.columns(2); vessel=j2.text_input("선박명"); bln=k2.text_input("B/L 번호")
+            note_epl=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not shpr or not item_epl: st.error("송하인·품목 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO export_packing_lists
+                            (epl_number,export_decl_id,ci_id,shipper,consignee,item_name,
+                             total_boxes,qty_per_box,total_qty,gross_weight,net_weight,
+                             dimensions,marks,port_of_loading,port_of_discharge,vessel_name,bl_number,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+                            gen_number("EPL"),emap.get(exp_sel),cmap.get(ci_sel_epl),
+                            shpr,csgn,item_epl,tbox,qpb,tbox*qpb,gw,nw,dims,marks,pol,pod,vessel,bln,note_epl))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("수출 포장명세서 목록")
+        conn=get_db(); df_epl=pd.read_sql_query("""
+            SELECT e.epl_number AS EPL번호, e.shipper AS 송하인, e.consignee AS 수하인,
+                   e.item_name AS 품목, e.total_boxes AS 박스수,
+                   e.total_qty AS 총수량,
+                   e.gross_weight AS 총중량, e.net_weight AS 순중량,
+                   e.port_of_loading AS 선적항, e.vessel_name AS 선박,
+                   e.bl_number AS BL번호, e.created_at AS 등록일
+            FROM export_packing_lists e ORDER BY e.id DESC""", conn); conn.close()
+        if df_epl.empty: st.info("없음")
+        else:
+            st.dataframe(df_epl, use_container_width=True, hide_index=True)
+            # 출력 뷰
+            st.divider(); st.subheader("📄 포장명세서 출력")
+            sel_epl=st.selectbox("EPL 선택",df_epl['EPL번호'].tolist())
+            r=df_epl[df_epl['EPL번호']==sel_epl].iloc[0]
+            st.markdown(f"""
+| 항목 | 내용 | 항목 | 내용 |
+|---|---|---|---|
+| **EPL번호** | {r['EPL번호']} | **B/L번호** | {r['BL번호'] or '-'} |
+| **송하인** | {r['송하인']} | **수하인** | {r['수하인']} |
+| **품목** | {r['품목']} | **선박** | {r['선박'] or '-'} |
+| **박스수** | {r['박스수']} boxes | **총수량** | {r['총수량']} EA |
+| **총중량** | {r['총중량']} kg | **순중량** | {r['순중량']} kg |
+| **선적항** | {r['선적항'] or '-'} | **등록일** | {r['등록일'][:10] if r['등록일'] else '-'} |
+""")
+
+
+# ══════════════════════════════════════════════════════
+# 무역 결제 (T/T · D/A · D/P)
+# ══════════════════════════════════════════════════════
+with tabs["tpay"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("💸 무역 결제 등록")
+        conn=get_db()
+        cis_tp=[r for r in conn.execute("SELECT id,ci_number,item_name FROM commercial_invoices ORDER BY id DESC LIMIT 30").fetchall()]
+        conn.close()
+        ci_tp_map={f"{r['ci_number']}-{r['item_name']}":r['id'] for r in cis_tp}
+        with st.form("tpay_f", clear_on_submit=True):
+            a,b=st.columns(2); ptype=a.selectbox("결제방식",["T/T 선불","T/T 후불","D/A","D/P","O/A","기타"]); pdir=b.selectbox("방향",["수입결제","수출수금"])
+            ci_tp_sel=st.selectbox("연결 CI",["없음"]+list(ci_tp_map.keys()))
+            cpart=st.text_input("거래처 *")
+            c,d=st.columns(2); cur_tp=c.selectbox("통화",["USD","EUR","JPY","CNY","KRW"]); amt_tp=d.number_input("금액",min_value=0.0,format="%.2f")
+            exr_tp=st.number_input("적용환율",min_value=0.0,value=1300.0,format="%.2f")
+            krw_tp=amt_tp*exr_tp if cur_tp!='KRW' else amt_tp
+            st.info(f"원화환산: ₩{krw_tp:,.0f}")
+            e2,f2=st.columns(2); due_tp=e2.date_input("결제기한"); bank_tp=f2.text_input("은행명")
+            ref_tp=st.text_input("은행 참조번호"); paid_tp=st.date_input("실제결제일")
+            st_tp=st.selectbox("상태",["미결제","결제완료","연체","부분결제"])
+            note_tp=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not cpart: st.error("거래처 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO trade_payments
+                            (payment_number,payment_type,direction,ci_id,counterpart,currency,
+                             amount,exchange_rate,krw_amount,due_date,paid_date,bank_ref,bank_name,status,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+                            gen_number("TPY"),ptype,pdir,ci_tp_map.get(ci_tp_sel),cpart,
+                            cur_tp,amt_tp,exr_tp,krw_tp,str(due_tp),str(paid_tp),ref_tp,bank_tp,st_tp,note_tp))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("무역 결제 현황")
+        conn=get_db(); df_tp=pd.read_sql_query("""
+            SELECT payment_number AS 결제번호, payment_type AS 방식, direction AS 방향,
+                   counterpart AS 거래처, currency AS 통화, amount AS 금액,
+                   krw_amount AS 원화, due_date AS 기한, paid_date AS 결제일,
+                   bank_name AS 은행, status AS 상태
+            FROM trade_payments ORDER BY id DESC""", conn); conn.close()
+        if df_tp.empty: st.info("없음")
+        else:
+            today_s=pd.Timestamp.now().strftime("%Y-%m-%d")
+            def tp_c(r): return ['background-color:#fee2e2']*len(r) if r['상태']=='연체' else (['background-color:#d1fae5']*len(r) if r['상태']=='결제완료' else ['']*len(r))
+            st.dataframe(df_tp.style.apply(tp_c,axis=1), use_container_width=True, hide_index=True)
+            c1,c2,c3=st.columns(3)
+            unpaid=df_tp[df_tp['상태'].isin(['미결제','연체'])]
+            c1.metric("미결제",f"₩{unpaid['원화'].sum():,.0f}",delta_color="inverse")
+            c2.metric("연체",f"{len(df_tp[df_tp['상태']=='연체'])}건",delta_color="inverse")
+            c3.metric("결제완료",f"{len(df_tp[df_tp['상태']=='결제완료'])}건")
+
+
+# ══════════════════════════════════════════════════════
+# 컨테이너 관리
+# ══════════════════════════════════════════════════════
+with tabs["ctn"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("📦 컨테이너 등록")
+        conn=get_db()
+        bls_ctn=[r for r in conn.execute("SELECT id,bl_number FROM logistics ORDER BY id DESC LIMIT 30").fetchall()]
+        fwds_ctn=[r for r in conn.execute("SELECT id,forwarder_name FROM forwarders WHERE status='활성'").fetchall()]
+        conn.close()
+        bl_ctn_map={r['bl_number']:r['id'] for r in bls_ctn}
+        fwd_ctn_map={r['forwarder_name']:r['id'] for r in fwds_ctn}
+        with st.form("ctn_f", clear_on_submit=True):
+            cnum=st.text_input("컨테이너번호 * (예: MSCU1234567)")
+            a,b=st.columns(2); ctype=a.selectbox("컨테이너 타입",["20GP","40GP","40HC","20RF","40RF","20OT","45HC"]); seal=b.text_input("봉인번호")
+            bl_sel_c=st.selectbox("연결 B/L",["없음"]+list(bl_ctn_map.keys()))
+            fwd_sel_c=st.selectbox("포워더",["없음"]+list(fwd_ctn_map.keys()))
+            c,d=st.columns(2); orig_p=c.text_input("출발항"); dest_p=d.text_input("도착항")
+            e,f=st.columns(2); etd_c=e.date_input("ETD(출항예정)"); eta_c=f.date_input("ETA(입항예정)")
+            g,h=st.columns(2); free_d=g.number_input("Free Days",min_value=0,value=14); dem_r=h.number_input("Demurrage($/일)",min_value=0.0,format="%.2f")
+            ret_dl=st.date_input("컨테이너 반납기한",value=pd.Timestamp.now()+pd.Timedelta(days=21))
+            cst=st.selectbox("상태",["예약","선적","운송중","입항","통관중","반납완료","지연"])
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not cnum: st.error("컨테이너번호 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO containers
+                            (container_number,container_type,bl_id,forwarder_id,seal_number,
+                             origin_port,dest_port,etd,eta,free_days,demurrage_rate,return_deadline,status)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(container_number) DO UPDATE SET
+                            container_type=excluded.container_type,status=excluded.status,
+                            return_deadline=excluded.return_deadline""",(
+                            cnum,ctype,bl_ctn_map.get(bl_sel_c),fwd_ctn_map.get(fwd_sel_c),seal,
+                            orig_p,dest_p,str(etd_c),str(eta_c),free_d,dem_r,str(ret_dl),cst))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("컨테이너 현황")
+        conn=get_db(); df_ctn=pd.read_sql_query("""
+            SELECT container_number AS 컨테이너번호, container_type AS 타입,
+                   origin_port AS 출발항, dest_port AS 도착항,
+                   etd AS ETD, eta AS ETA,
+                   free_days AS FreeDays,
+                   demurrage_rate AS 데머리지율,
+                   return_deadline AS 반납기한,
+                   CAST(julianday(return_deadline)-julianday('now') AS INTEGER) AS 반납잔여일,
+                   status AS 상태
+            FROM containers ORDER BY eta""", conn); conn.close()
+        if df_ctn.empty: st.info("없음")
+        else:
+            today_s=pd.Timestamp.now().strftime("%Y-%m-%d")
+            overdue=df_ctn[(df_ctn['반납잔여일']<0)&(~df_ctn['상태'].isin(['반납완료']))]
+            soon=df_ctn[(df_ctn['반납잔여일']>=0)&(df_ctn['반납잔여일']<=7)&(~df_ctn['상태'].isin(['반납완료']))]
+            if not overdue.empty:
+                st.error(f"⚠️ 반납 기한 초과 — {len(overdue)}개 (데머리지 발생 중)")
+                st.dataframe(overdue[['컨테이너번호','타입','반납기한','반납잔여일','데머리지율','상태']],use_container_width=True,hide_index=True)
+            if not soon.empty:
+                st.warning(f"🟡 7일 내 반납 예정 — {len(soon)}개")
+            st.dataframe(df_ctn, use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════
+# 운송 실시간 추적 (타임라인)
+# ══════════════════════════════════════════════════════
+with tabs["track"]:
+    st.subheader("🗺️ 운송 진행 추적")
+    conn=get_db()
+    bls_t=[r for r in conn.execute("SELECT id,bl_number,transport_type,carrier,status FROM logistics ORDER BY id DESC").fetchall()]
+    conn.close()
+    if not bls_t:
+        st.info("B/L 없음")
+    else:
+        bl_t_map={f"{r['bl_number']} [{r['transport_type']}] — {r['status']}":r for r in bls_t}
+        sel_bl_t=st.selectbox("B/L 선택",list(bl_t_map.keys()))
+        bl_data=bl_t_map[sel_bl_t]
+
+        col_l,col_r=st.columns([2,1])
+        with col_l:
+            st.subheader("이벤트 등록")
+            with st.form("sev_f",clear_on_submit=True):
+                a,b=st.columns(2)
+                ev_type=a.selectbox("이벤트",["선적완료","출항","중간항 경유","입항","안벽접안","하역완료","통관신고","통관완료","창고입고","배송출발","배송완료","지연발생","기타"])
+                ev_date=b.date_input("일자")
+                ev_loc=st.text_input("위치/항구")
+                ev_desc=st.text_area("상세내용",height=50)
+                # 컨테이너 연결
+                conn=get_db(); ctns=[r[0] for r in conn.execute("SELECT container_number FROM containers WHERE bl_id=?",(bl_data['id'],)).fetchall()]; conn.close()
+                ctn_sel=st.selectbox("컨테이너",["없음"]+ctns)
+                conn=get_db(); ctn_id=conn.execute("SELECT id FROM containers WHERE container_number=?",(ctn_sel,)).fetchone(); conn.close()
+                if st.form_submit_button("✅ 이벤트 추가",use_container_width=True):
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO shipment_events(bl_id,container_id,event_type,event_date,location,description)
+                            VALUES(?,?,?,?,?,?)""",(bl_data['id'],ctn_id[0] if ctn_id else None,ev_type,str(ev_date),ev_loc,ev_desc))
+                        conn.commit(); conn.close(); st.success("추가!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+        with col_r:
+            # BL 기본 정보
+            conn=get_db(); bl_info=conn.execute("SELECT * FROM logistics WHERE id=?",(bl_data['id'],)).fetchone(); conn.close()
+            if bl_info:
+                st.metric("운송사",bl_info['carrier'] or '-')
+                st.metric("출발",bl_info['departure_date'] or '-')
+                st.metric("도착예정",bl_info['arrival_date'] or '-')
+                st.metric("상태",bl_info['status'])
+
+        # 타임라인 표시
+        st.divider()
+        st.subheader("📍 운송 타임라인")
+        conn=get_db(); df_ev=pd.read_sql_query("""
+            SELECT event_type AS 이벤트, event_date AS 일자, location AS 위치,
+                   description AS 내용, source AS 출처, created_at AS 등록일시
+            FROM shipment_events WHERE bl_id=?
+            ORDER BY event_date,id""",(bl_data['id'],),conn); conn.close()
+        if df_ev.empty:
+            st.info("등록된 이벤트 없음")
+        else:
+            # 타임라인 시각화
+            status_icons={"선적완료":"🚢","출항":"⛵","중간항 경유":"🔄","입항":"⚓","안벽접안":"🏗️",
+                          "하역완료":"📦","통관신고":"📋","통관완료":"✅","창고입고":"🏭",
+                          "배송출발":"🚚","배송완료":"🎉","지연발생":"⚠️","기타":"📌"}
+            for _,ev in df_ev.iterrows():
+                icon=status_icons.get(ev['이벤트'],"📌")
+                with st.container():
+                    c1,c2=st.columns([1,4])
+                    c1.markdown(f"**{ev['일자']}**")
+                    c2.markdown(f"{icon} **{ev['이벤트']}** — {ev['위치'] or ''} {ev['내용'] or ''}")
+            st.divider()
+            st.dataframe(df_ev,use_container_width=True,hide_index=True)
+
+
+# ══════════════════════════════════════════════════════
+# 무역보험
+# ══════════════════════════════════════════════════════
+with tabs["ins"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("🛡️ 무역보험 등록")
+        with st.form("ins_f", clear_on_submit=True):
+            a,b=st.columns(2); ins_num=a.text_input("증권번호"); ins_type=b.selectbox("보험유형",["수출보험","수입보험","적하보험","신용보험","환변동보험"])
+            insurer=st.selectbox("보험자",["한국무역보험공사(K-SURE)","삼성화재","현대해상","DB손해보험","기타"])
+            insured=st.text_input("피보험자(수출자/수입자) *")
+            c,d=st.columns(2); cov_amt=c.number_input("보험금액",min_value=0.0,format="%.2f"); cur_ins=d.selectbox("통화",["USD","EUR","KRW"])
+            prem=st.number_input("보험료",min_value=0.0,format="%.2f")
+            e,f=st.columns(2); sd_ins=e.date_input("보험시작일"); ed_ins=f.date_input("보험만료일",value=pd.Timestamp.now()+pd.Timedelta(days=365))
+            claim=st.number_input("보상청구금액",min_value=0.0,format="%.2f"); ins_st=st.selectbox("상태",["유효","만료","청구중","보상완료","취소"])
+            note_ins=st.text_area("비고",height=40)
+            if st.form_submit_button("✅ 등록",use_container_width=True):
+                if not insured: st.error("피보험자 필수")
+                else:
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO trade_insurance
+                            (insurance_number,insurance_type,insurer,insured,coverage_amount,currency,premium,start_date,end_date,claim_amount,status,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",(
+                            ins_num or gen_number("INS"),ins_type,insurer,insured,cov_amt,cur_ins,prem,str(sd_ins),str(ed_ins),claim,ins_st,note_ins))
+                        conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("보험 목록")
+        conn=get_db(); df_ins2=pd.read_sql_query("""
+            SELECT insurance_number AS 증권번호, insurance_type AS 유형, insurer AS 보험자,
+                   insured AS 피보험자, coverage_amount AS 보험금액, currency AS 통화,
+                   premium AS 보험료,
+                   CAST(julianday(end_date)-julianday('now') AS INTEGER) AS 잔여일,
+                   end_date AS 만료일, status AS 상태
+            FROM trade_insurance ORDER BY end_date""", conn); conn.close()
+        if df_ins2.empty: st.info("없음")
+        else:
+            exp_soon=df_ins2[(df_ins2['잔여일']<=30)&(df_ins2['상태']=='유효')]
+            if not exp_soon.empty: st.warning(f"⚠️ 30일 내 만료 보험: {len(exp_soon)}건")
+            def ins_c(r): return ['background-color:#fee2e2']*len(r) if r['잔여일']<0 and r['상태']=='유효' else ['']*len(r)
+            st.dataframe(df_ins2.style.apply(ins_c,axis=1), use_container_width=True, hide_index=True)
+            c1,c2=st.columns(2)
+            c1.metric("유효 보험건수",len(df_ins2[df_ins2['상태']=='유효']))
+            c2.metric("총 보험료",f"${df_ins2['보험료'].sum():,.0f}")
+
+
+# ══════════════════════════════════════════════════════
+# 관세 납부 관리
+# ══════════════════════════════════════════════════════
+with tabs["duty_pay"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("💴 관세 납부 등록")
+        conn=get_db()
+        imps_dp=[r for r in conn.execute("SELECT id,decl_number,item_name,customs_duty,vat_amount,total_tax FROM import_declarations WHERE status='수리완료' ORDER BY id DESC").fetchall()]
+        conn.close()
+        imp_dp_map={f"{r['decl_number']}-{r['item_name']} (총:{r['total_tax']:,.0f}원)":r for r in imps_dp}
+        with st.form("dp_f", clear_on_submit=True):
+            if not imp_dp_map: st.info("수리완료 수입신고 없음"); st.form_submit_button("등록",disabled=True)
+            else:
+                dp_sel=st.selectbox("수입신고 *",list(imp_dp_map.keys()))
+                dp_d=imp_dp_map[dp_sel]
+                a,b=st.columns(2); duty_dp=a.number_input("관세",min_value=0.0,value=float(dp_d['customs_duty']),format="%.0f"); vat_dp=b.number_input("부가세",min_value=0.0,value=float(dp_d['vat_amount']),format="%.0f")
+                other_dp=st.number_input("기타세금(교통세 등)",min_value=0.0,format="%.0f")
+                total_dp=duty_dp+vat_dp+other_dp; st.info(f"납부총액: ₩{total_dp:,.0f}")
+                c,d=st.columns(2); due_dp=c.date_input("납부기한"); paid_dp=d.date_input("실납부일")
+                e,f=st.columns(2); pmeth=e.selectbox("납부방법",["계좌이체","관세청고지","분납","카드"]); inst=f.checkbox("분납")
+                inst_seq=st.number_input("분납 회차",min_value=1,value=1) if inst else 1
+                bref_dp=st.text_input("납부 참조번호"); dpst=st.selectbox("상태",["미납","납부완료","연체","분납중"])
+                if st.form_submit_button("✅ 등록",use_container_width=True):
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO customs_payments
+                            (payment_number,import_decl_id,decl_number,item_name,duty_amount,vat_amount,other_tax,total_amount,due_date,paid_date,payment_method,bank_ref,installment,installment_seq,status)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+                            gen_number("DPY"),dp_d['id'],dp_d['decl_number'],dp_d['item_name'],
+                            duty_dp,vat_dp,other_dp,total_dp,str(due_dp),str(paid_dp),pmeth,bref_dp,
+                            1 if inst else 0,inst_seq,dpst))
+                        conn.commit(); conn.close(); st.success("납부 등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("관세 납부 현황")
+        conn=get_db(); df_dp=pd.read_sql_query("""
+            SELECT payment_number AS 납부번호, decl_number AS 신고번호, item_name AS 품목,
+                   duty_amount AS 관세, vat_amount AS 부가세, other_tax AS 기타,
+                   total_amount AS 납부총액,
+                   due_date AS 납부기한,
+                   CAST(julianday('now')-julianday(due_date) AS INTEGER) AS 경과일,
+                   paid_date AS 납부일, payment_method AS 방법, status AS 상태
+            FROM customs_payments ORDER BY due_date""", conn); conn.close()
+        if df_dp.empty: st.info("없음")
+        else:
+            unpaid=df_dp[df_dp['상태'].isin(['미납','연체'])]
+            if not unpaid.empty:
+                st.error(f"⚠️ 미납·연체: {len(unpaid)}건  |  합계: ₩{unpaid['납부총액'].sum():,.0f}")
+            c1,c2,c3=st.columns(3)
+            c1.metric("총 관세",f"₩{df_dp['관세'].sum():,.0f}")
+            c2.metric("총 부가세",f"₩{df_dp['부가세'].sum():,.0f}")
+            c3.metric("납부완료",f"{len(df_dp[df_dp['상태']=='납부완료'])}건")
+            def dp_c(r): return ['background-color:#fee2e2']*len(r) if r['상태']=='연체' else (['background-color:#fef9c3']*len(r) if r['상태']=='미납' and r['경과일']>0 else ['']*len(r))
+            st.dataframe(df_dp.style.apply(dp_c,axis=1), use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════
+# 수출 환급금 관리
+# ══════════════════════════════════════════════════════
+with tabs["refund"]:
+    col_form, col_list = st.columns([1, 2])
+    with col_form:
+        st.subheader("🔄 수출 환급금 신청")
+        st.caption("수출에 소요된 원재료 수입 시 납부한 관세를 환급받는 제도")
+        conn=get_db()
+        exps_rf=[r for r in conn.execute("SELECT id,decl_number,item_name,quantity FROM export_declarations WHERE status IN ('수리완료','선적완료') ORDER BY id DESC").fetchall()]
+        conn.close()
+        exp_rf_map={f"{r['decl_number']}-{r['item_name']}":r for r in exps_rf}
+        with st.form("ref_f", clear_on_submit=True):
+            if not exp_rf_map: st.info("수리완료 수출신고 없음"); st.form_submit_button("등록",disabled=True)
+            else:
+                rf_sel=st.selectbox("수출신고 *",list(exp_rf_map.keys()))
+                rf_d=exp_rf_map[rf_sel]
+                a,b=st.columns(2); item_rf=a.text_input("품목명",value=rf_d['item_name']); hs_rf=b.text_input("HS Code")
+                c,d=st.columns(2); qty_rf=c.number_input("수출수량",min_value=0.0,value=float(rf_d['quantity']),format="%.2f"); paid_duty=d.number_input("납부관세",min_value=0.0,format="%.0f")
+                rate_rf=st.slider("환급율(%)",0,100,100)
+                refund_amt=round(paid_duty*rate_rf/100,0)
+                st.success(f"환급예상액: ₩{refund_amt:,.0f}")
+                e2,f2=st.columns(2); appl_d=e2.date_input("신청일"); recv_d=f2.date_input("수령예정일",value=pd.Timestamp.now()+pd.Timedelta(days=30))
+                cref_rf=st.text_input("관세청 신고번호"); rf_st=st.selectbox("상태",["신청예정","신청완료","심사중","환급완료","반려"])
+                note_rf=st.text_area("비고",height=40)
+                if st.form_submit_button("✅ 등록",use_container_width=True):
+                    try:
+                        conn=get_db()
+                        conn.execute("""INSERT INTO export_refunds
+                            (refund_number,export_decl_id,decl_number,item_name,hs_code,export_qty,paid_duty,refund_rate,refund_amount,apply_date,receive_date,customs_ref,status,note)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+                            gen_number("RFD"),rf_d['id'],rf_d['decl_number'],item_rf,hs_rf,
+                            qty_rf,paid_duty,rate_rf,refund_amt,str(appl_d),str(recv_d),cref_rf,rf_st,note_rf))
+                        conn.commit(); conn.close(); st.success("신청 등록!"); st.rerun()
+                    except Exception as e: st.error(f"오류:{e}")
+    with col_list:
+        st.subheader("환급금 현황")
+        conn=get_db(); df_rf=pd.read_sql_query("""
+            SELECT refund_number AS 환급번호, decl_number AS 수출신고번호,
+                   item_name AS 품목, paid_duty AS 납부관세,
+                   refund_rate AS 환급율, refund_amount AS 환급예정액,
+                   apply_date AS 신청일, receive_date AS 수령예정,
+                   status AS 상태
+            FROM export_refunds ORDER BY id DESC""", conn); conn.close()
+        if df_rf.empty: st.info("없음")
+        else:
+            c1,c2,c3=st.columns(3)
+            c1.metric("총 환급신청",f"₩{df_rf['환급예정액'].sum():,.0f}")
+            c2.metric("환급완료",f"₩{df_rf[df_rf['상태']=='환급완료']['환급예정액'].sum():,.0f}")
+            c3.metric("심사중",f"{len(df_rf[df_rf['상태']=='심사중'])}건")
+            def rf_c(v): return "background-color:#d1fae5" if v=="환급완료" else ("background-color:#fef3c7" if v=="심사중" else "")
+            st.dataframe(df_rf.style.map(rf_c,subset=['상태']), use_container_width=True, hide_index=True)
+
+            try:
+                import plotly.express as px
+                fig=px.bar(df_rf.groupby('상태')['환급예정액'].sum().reset_index(),
+                           x='상태',y='환급예정액',color='상태',title="환급금 상태별 현황",
+                           color_discrete_map={"신청예정":"#94a3b8","신청완료":"#3b82f6","심사중":"#f97316","환급완료":"#22c55e","반려":"#ef4444"})
+                fig.update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0),showlegend=False)
+                st.plotly_chart(fig,use_container_width=True)
+            except: pass
