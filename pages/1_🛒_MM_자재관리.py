@@ -111,6 +111,8 @@ except:
     pass
 
 st.title("🛒 MM – Materials Management (자재관리)")
+inject_css()
+apply_plotly_theme()
 
 # ── 대분류 탭 (4개) ──────────────────────────────
 main_tabs = st.tabs([
@@ -2441,7 +2443,7 @@ with tabs["vmi"]:
     with col_form:
         st.subheader("VMI 협약 등록")
         conn=get_db()
-        sups_v=[r for r in conn.execute("SELECT id,supplier_name FROM suppliers WHERE status='활성'").fetchall()]
+        sups_v=[r for r in conn.execute("SELECT id,name AS supplier_name FROM suppliers WHERE status='활성'").fetchall()]
         conn.close()
         with st.form("vmi_f", clear_on_submit=True):
             sup_v=st.selectbox("공급사",([r['supplier_name'] for r in sups_v] if sups_v else ["직접입력"]))

@@ -42,6 +42,8 @@ _add_col("deliveries","actual_delivery"); _add_col("customers","payment_terms","
 _add_col("customers","tax_number"); _add_col("customers","region")
 
 st.title("🛍️ SD – Sales & Distribution (판매/출하/청구)")
+inject_css()
+apply_plotly_theme()
 
 main_tabs = st.tabs(["👥 고객·가격", "📋 수주 프로세스", "🚚 출하·배송", "💰 청구·채권", "👤 영업관리", "📊 영업 분석"])
 tabs = {}

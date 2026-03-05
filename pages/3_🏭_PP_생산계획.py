@@ -44,6 +44,8 @@ _ac("bom","bom_level","INTEGER DEFAULT 1")
 _ac("bom","valid_from","TEXT"); _ac("bom","valid_to","TEXT")
 
 st.title("🏭 PP – Production Planning (생산계획/MRP)")
+inject_css()
+apply_plotly_theme()
 
 main_tabs=st.tabs(["🗂️ 기준정보","📋 생산계획·WO","⚙️ MRP","📊 생산 분석"])
 tabs={}
@@ -622,7 +624,7 @@ with tabs["subcon"]:
     with col_form:
         st.subheader("🔧 외주 발주")
         conn=get_db()
-        sups=[r[0] for r in conn.execute("SELECT supplier_name FROM suppliers WHERE status='활성' ORDER BY supplier_name").fetchall()]
+        sups=[r[0] for r in conn.execute("SELECT name FROM suppliers WHERE status='활성' ORDER BY name").fetchall()]
         prods=[r[0] for r in conn.execute("SELECT DISTINCT product_name FROM bom ORDER BY product_name").fetchall()]
         conn.close()
         with st.form("sc_f", clear_on_submit=True):

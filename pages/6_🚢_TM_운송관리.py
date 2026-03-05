@@ -4,6 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.db import get_db, gen_number, init_trade_db
 from utils.design import inject_css, apply_plotly_theme
+from datetime import datetime, timedelta, date
 from utils.api_client import (
     get_api_keys, save_api_key,
     fetch_bok_exchange_rates, fetch_unipass_customs_rate,
@@ -20,6 +21,8 @@ from utils.api_client import (
 init_trade_db()
 
 st.title("🚢 TM – Transportation & Trade Management (운송/수출입 관리)")
+inject_css()
+apply_plotly_theme()
 
 main_tm = st.tabs(["🔧 기준·설정", "📦 수출입 업무", "🚛 운송·결제", "📊 무역 분석"])
 
@@ -1088,7 +1091,7 @@ with tabs["co"]:
     with col_form:
         st.subheader("📜 원산지 증명서 발급")
         conn=get_db()
-        exps=[r[0] for r in conn.execute("SELECT export_declaration_number FROM export_declarations ORDER BY id DESC LIMIT 30").fetchall()]
+        exps=[r[0] for r in conn.execute("SELECT decl_number FROM export_declarations ORDER BY id DESC LIMIT 30").fetchall()]
         conn.close()
         with st.form("co_f", clear_on_submit=True):
             exp_sel = st.selectbox("수출면장", ["직접입력"]+exps)
@@ -1110,7 +1113,7 @@ with tabs["co"]:
                     except Exception as e: st.error(f"오류:{e}")
     with col_list:
         st.subheader("C/O 목록")
-        conn=get_db(); df_co=pd.read_sql_query("SELECT co_number AS C/O번호,exporter_name AS 수출자,item_name AS 품목,hs_code AS HS,origin_country AS 원산지,dest_country AS 목적국,co_type AS 유형,fta_agreement AS FTA협정,issue_date AS 발급일,valid_to AS 유효기간,status AS 상태 FROM origin_certificates ORDER BY id DESC",conn); conn.close()
+        conn=get_db(); df_co=pd.read_sql_query("""SELECT co_number AS "C/O번호",exporter_name AS 수출자,item_name AS 품목,hs_code AS HS,origin_country AS 원산지,dest_country AS 목적국,co_type AS 유형,fta_agreement AS FTA협정,issue_date AS 발급일,valid_to AS 유효기간,status AS 상태 FROM origin_certificates ORDER BY id DESC""",conn); conn.close()
         if df_co.empty: st.info("없음")
         else:
             today_s=datetime.now().strftime("%Y-%m-%d")
@@ -1177,7 +1180,7 @@ with tabs["bi_fx"]:
         conn=get_db()
         st.subheader("💱 환율 영향 분석")
         # 환율 데이터
-        df_fx=pd.read_sql_query("SELECT currency,rate,created_at FROM exchange_rates ORDER BY created_at DESC LIMIT 200",conn)
+        df_fx=pd.read_sql_query("SELECT currency,rate_to_krw AS rate,rate_date AS created_at FROM exchange_rates ORDER BY rate_date DESC LIMIT 200",conn)
         if not df_fx.empty:
             df_fx['날짜']=df_fx['created_at'].str[:10]
             c1,c2,c3=st.columns(3)
@@ -1199,11 +1202,11 @@ with tabs["bi_fx"]:
 
         # 수입 환율 영향 분석
         st.subheader("📥 수입 원가 환율 영향")
-        df_imp=pd.read_sql_query("SELECT currency,cif_value,customs_duty,total_tax,created_at FROM import_declarations ORDER BY created_at",conn)
+        df_imp=pd.read_sql_query("SELECT currency,invoice_value,customs_duty,total_tax,created_at FROM import_declarations ORDER BY created_at",conn)
         if not df_imp.empty:
             col_l,col_r=st.columns(2)
             with col_l:
-                df_cur_imp=df_imp.groupby('currency').agg(건수=('cif_value','count'),CIF합계=('cif_value','sum'),관세합계=('customs_duty','sum')).reset_index()
+                df_cur_imp=df_imp.groupby('currency').agg(건수=('invoice_value','count'),CIF합계=('invoice_value','sum'),관세합계=('customs_duty','sum')).reset_index()
                 st.plotly_chart(px.bar(df_cur_imp,x='currency',y='CIF합계',color='currency',title="통화별 수입 CIF금액").update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
             with col_r:
                 st.plotly_chart(px.pie(df_cur_imp,names='currency',values='건수',title="수입 통화 비중",hole=0.4).update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
@@ -1223,8 +1226,8 @@ with tabs["bi_country"]:
         # KPI
         exp_cnt=conn.execute("SELECT COUNT(*) FROM export_declarations").fetchone()[0]
         imp_cnt=conn.execute("SELECT COUNT(*) FROM import_declarations").fetchone()[0]
-        exp_fob=conn.execute("SELECT COALESCE(SUM(fob_value),0) FROM export_declarations").fetchone()[0]
-        imp_cif=conn.execute("SELECT COALESCE(SUM(cif_value),0) FROM import_declarations").fetchone()[0]
+        exp_fob=conn.execute("SELECT COALESCE(SUM(invoice_value),0) FROM export_declarations").fetchone()[0]
+        imp_cif=conn.execute("SELECT COALESCE(SUM(invoice_value),0) FROM import_declarations").fetchone()[0]
         c1,c2,c3,c4=st.columns(4)
         c1.metric("수출 건수",f"{exp_cnt}건"); c2.metric("수출 FOB합계",f"${exp_fob:,.0f}")
         c3.metric("수입 건수",f"{imp_cnt}건"); c4.metric("수입 CIF합계",f"${imp_cif:,.0f}")
@@ -1232,11 +1235,11 @@ with tabs["bi_country"]:
 
         col_l,col_r=st.columns(2)
         with col_l:
-            df_exp_c=pd.read_sql_query("SELECT destination_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(fob_value),0) AS FOB합계 FROM export_declarations GROUP BY destination_country ORDER BY FOB합계 DESC LIMIT 12",conn)
+            df_exp_c=pd.read_sql_query("SELECT destination_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(invoice_value),0) AS FOB합계 FROM export_declarations GROUP BY destination_country ORDER BY FOB합계 DESC LIMIT 12",conn)
             if not df_exp_c.empty:
                 st.plotly_chart(px.bar(df_exp_c,y='국가',x='FOB합계',orientation='h',color='FOB합계',color_continuous_scale='Blues',title="수출 국가별 FOB금액 TOP12").update_layout(height=320,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
         with col_r:
-            df_imp_c=pd.read_sql_query("SELECT origin_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(cif_value),0) AS CIF합계 FROM import_declarations GROUP BY origin_country ORDER BY CIF합계 DESC LIMIT 12",conn)
+            df_imp_c=pd.read_sql_query("SELECT origin_country AS 국가,COUNT(*) AS 건수,ROUND(SUM(invoice_value),0) AS CIF합계 FROM import_declarations GROUP BY origin_country ORDER BY CIF합계 DESC LIMIT 12",conn)
             if not df_imp_c.empty:
                 st.plotly_chart(px.bar(df_imp_c,y='국가',x='CIF합계',orientation='h',color='CIF합계',color_continuous_scale='Oranges',title="수입 국가별 CIF금액 TOP12").update_layout(height=320,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
 
@@ -1249,8 +1252,8 @@ with tabs["bi_country"]:
 
         # 월별 수출입 추이
         st.subheader("📈 월별 수출입 추이")
-        df_exp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수출건수,ROUND(SUM(fob_value),0) AS FOB FROM export_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
-        df_imp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수입건수,ROUND(SUM(cif_value),0) AS CIF FROM import_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        df_exp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수출건수,ROUND(SUM(invoice_value),0) AS FOB FROM export_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        df_imp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수입건수,ROUND(SUM(invoice_value),0) AS CIF FROM import_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
         if not df_exp_m.empty or not df_imp_m.empty:
             col_l2,col_r2=st.columns(2)
             with col_l2:

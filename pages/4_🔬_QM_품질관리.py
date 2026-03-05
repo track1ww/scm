@@ -56,6 +56,8 @@ _ac("nonconformance","supplier_name"); _ac("nonconformance","po_number")
 _ac("nonconformance","preventive_action","TEXT"); _ac("nonconformance","closed_at","TEXT")
 
 st.title("🔬 QM – Quality Management (품질관리)")
+inject_css()
+apply_plotly_theme()
 
 main_tabs=st.tabs(["📋 검사 기준","🔍 품질검사","⚠️ 부적합·CAPA","📞 고객 클레임","🔧 교정 관리","🏭 공급사 감사","📊 품질 분석"])
 tabs={}
@@ -542,7 +544,7 @@ with tabs["audit_plan"]:
     col_form, col_list = st.columns([1, 2])
     with col_form:
         st.subheader("🔍 감사 계획 등록")
-        conn=get_db(); sups_a=[r[0] for r in conn.execute("SELECT supplier_name FROM suppliers WHERE status='활성' ORDER BY supplier_name").fetchall()]; conn.close()
+        conn=get_db(); sups_a=[r[0] for r in conn.execute("SELECT name FROM suppliers WHERE status='활성' ORDER BY name").fetchall()]; conn.close()
         with st.form("aud_f", clear_on_submit=True):
             sup_a=st.selectbox("공급사 *",sups_a if sups_a else ["직접입력"])
             if not sups_a: sup_a=st.text_input("공급사명 *")

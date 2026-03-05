@@ -17,6 +17,8 @@ _ac("goods_receipts","fifo_layer","INTEGER DEFAULT 1")
 _ac("materials","max_stock","REAL DEFAULT 0"); _ac("materials","new_avg","REAL DEFAULT 0")
 
 st.title("📦 WM/EWM – Warehouse Management (창고관리)")
+inject_css()
+apply_plotly_theme()
 
 main_tabs = st.tabs(["🏗️ 기준정보", "📦 입출고", "📊 재고 관리", "🔍 실사·폐기", "📈 분석·예측"])
 tabs = {}
