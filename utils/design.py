@@ -131,13 +131,13 @@ section.main {
     box-shadow: var(--shadow-sm) !important;
 }
 [data-testid="stButton"] > button[kind="primary"] {
-    background: var(--text-primary) !important;
-    color: #fff !important;
+    background: #c9b8e8 !important;
+    color: #3d2b6b !important;
     border: none !important;
     font-weight: 600 !important;
 }
 [data-testid="stButton"] > button[kind="primary"]:hover {
-    background: #333 !important;
+    background: #b8a4de !important;
     box-shadow: var(--shadow-sm) !important;
 }
 
