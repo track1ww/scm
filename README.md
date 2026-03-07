@@ -17,7 +17,7 @@ scm_sap/
 ├── utils/
 │   ├── db.py                     # MySQL 연결 및 DB 초기화
 │   ├── auth.py                   # 인증 / 권한 관리
-│   └── design.py                 # Notion 스타일 디자인 시스템
+│   └── design.py                 
 ├── pages/
 │   ├── 0_🔐_로그인.py
 │   ├── 1_🛒_MM_자재관리.py
