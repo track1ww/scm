@@ -1,247 +1,193 @@
-# SCM 통합관리 시스템
+# ⛓ SCM 통합관리 시스템
 
-SAP 물류·SCM 모듈 기반의 Streamlit 웹 애플리케이션입니다.  
-MM · SD · PP · QM · WM · TM 6개 모듈을 SQLite 단일 DB로 통합 운영합니다.
-
----
-
-## 목차
-
-1. [프로젝트 구조](#프로젝트-구조)
-2. [설치 및 실행](#설치-및-실행)
-3. [모듈 개요](#모듈-개요)
-4. [DB 스키마](#db-스키마)
-5. [디자인 시스템](#디자인-시스템)
-6. [알려진 제한사항](#알려진-제한사항)
+사내 공급망 전 영역(구매 → 생산 → 품질 → 창고 → 운송 → 판매)을 하나의 웹 애플리케이션에서 관리하는 **경량화 SCM 솔루션**입니다.  
+Streamlit + MySQL 기반으로 별도 서버 없이 사내 배포가 가능합니다.
 
 ---
 
-## 프로젝트 구조
+## 📁 프로젝트 구조
 
 ```
 scm_sap/
-├── app.py                      # 메인 대시보드
-├── scm.db                      # SQLite DB (첫 실행 시 자동 생성)
-├── fix_db.py                   # DB 스키마 수동 보정 스크립트
+├── app.py                        # 메인 대시보드 (로그인 통합)
+├── utils/
+│   ├── db.py                     # MySQL 연결 및 DB 초기화
+│   ├── auth.py                   # 인증 / 권한 관리
+│   └── design.py                 # Notion 스타일 디자인 시스템
 ├── pages/
+│   ├── 0_🔐_로그인.py
 │   ├── 1_🛒_MM_자재관리.py
 │   ├── 2_🛍️_SD_판매출하.py
 │   ├── 3_🏭_PP_생산계획.py
 │   ├── 4_🔬_QM_품질관리.py
 │   ├── 5_📦_WM_창고관리.py
-│   └── 6_🚢_TM_운송관리.py
-└── utils/
-    ├── __init__.py
-    ├── db.py                   # DB 초기화 및 공통 쿼리
-    ├── design.py               # 글로벌 CSS · Plotly 테마
-    └── api_client.py           # 한국은행 · 관세청 API 연동
+│   ├── 6_🚢_TM_운송관리.py
+│   ├── 7_📐_SCM_공식계산기.py
+│   └── 9_👑_관리자.py
+├── fix_db.py                     # DB 마이그레이션 스크립트
+├── api_client.py                 # 외부 API 연동 모듈
+└── scm.db                        # SQLite 개발용 DB (운영은 MySQL)
 ```
 
 ---
 
-## 설치 및 실행
+## 🚀 빠른 시작
 
-### 요구사항
-
-- Python 3.9 이상
-
-### 설치
+### 1. 패키지 설치
 
 ```bash
-pip install streamlit pandas plotly requests
+pip install streamlit pymysql bcrypt pandas plotly
 ```
 
-### 실행
+### 2. 환경변수 설정
+
+`.env` 파일 또는 서버 환경변수에 아래 값을 설정합니다.
+
+```env
+SCM_DB_HOST=192.168.x.x      # 사내 MySQL 서버 IP
+SCM_DB_PORT=3306
+SCM_DB_USER=scm_user
+SCM_DB_PASS=your_password
+SCM_DB_NAME=scm_db
+```
+
+### 3. DB 초기화 (최초 1회)
 
 ```bash
-cd scm_sap
+python -c "from utils.db import init_db, insert_default_data; init_db(); insert_default_data()"
+```
+
+> 초기 관리자 계정: `admin@company.com` / `admin1234`
+
+### 4. 앱 실행
+
+```bash
 streamlit run app.py
 ```
 
-브라우저에서 `http://localhost:8501` 접속
+---
 
-> `scm.db` 파일이 없으면 첫 실행 시 자동으로 생성됩니다.
+## 📦 모듈 소개
+
+### 🛒 MM — 자재관리 (Materials Management)
+공급사 관리, 자재 마스터, 구매요청(PR), 견적(RFQ), 발주서(PO), 입고(GR), 송장검증, 지급관리, 블랭킷 PO, 대체자재, 이동평균단가, 구매 KPI 등 구매 전 프로세스를 포괄합니다.
+
+### 🛍️ SD — 판매출하 (Sales & Distribution)
+고객 마스터, 신용한도, 가격조건표, 판매주문(SO), ATP 가용확인, 출하/피킹, 배송추적, 반품, 청구서, 매출세금계산서, 수금관리, 채권 Aging, 영업사원 실적을 관리합니다.
+
+### 🏭 PP — 생산계획 (Production Planning)
+수요계획, MRP, 생산오더, 작업지시, 자재소요계획, PP-SD 연동을 지원합니다.
+
+### 🔬 QM — 품질관리 (Quality Management)
+입고 검사, 공정 품질, 불량 분석, 협력사 품질 평가를 관리합니다.
+
+### 📦 WM — 창고관리 (Warehouse Management)
+입출고, 재고 실사, Bin 관리, 로트 추적, 창고 분석을 포함합니다.
+
+### 🚢 TM — 운송관리 (Trade & Transportation)
+수출입 CI/B/L, 수입신고, 수출면장, L/C 신용장, T/T·D/A 결제, 운송오더, 컨테이너 관리, 환율 관리, FTA 협정세율, 전략물자 판정, 수출환급금 관리를 지원합니다.
+
+### 📐 SCM 공식계산기
+EOQ, 안전재고, 재주문점, 리드타임 분석 등 공급망 핵심 공식을 인터랙티브하게 계산하고 시각화합니다.
+
+### 👑 관리자
+사용자 계정 활성화/비활성화, 관리자 권한 부여, 페이지별 읽기·쓰기 권한 관리, 허용 이메일 도메인 설정을 담당합니다.
 
 ---
 
-## 모듈 개요
+## 🔐 인증 및 권한 체계
 
-### 🛒 MM — Materials Management (자재관리)
+| 구분 | 설명 |
+|------|------|
+| 회원가입 | 허용된 사내 도메인 이메일만 가입 가능 |
+| 로그인 | bcrypt 암호화 · 세션 기반 인증 |
+| 권한 | 관리자가 사용자별로 페이지 읽기/쓰기 권한 개별 부여 |
+| 관리자 | `is_admin=1`인 계정은 전 페이지 전체 권한 자동 부여 |
+| 비밀번호 초기화 | 관리자 페이지에서 `scm1234!`로 초기화 가능 |
 
-구매 프로세스 전 단계를 관리합니다.
+**페이지 키 매핑**
 
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 공급사·자재 | 공급사 등록/평가, 자재 마스터, 대체자재, PIR(구매정보레코드) |
-| 구매 프로세스 | PR → 품의서 → RFQ → 견적비교 → 계약 → 블랭킷PO → PO |
-| 입출고 | 입고(GR), 반품(RTV), 이동평균단가 관리 |
-| 정산·분석 | 송장검증(IV), 세금계산서, 지급관리, KPI 분석 |
-| 고급 기능 | **ROP 자동발주**, **VMI(공급사 관리 재고)** |
-
----
-
-### 🛍️ SD — Sales & Distribution (판매/출하/청구)
-
-수주부터 대금 회수까지 O2C 프로세스를 커버합니다.
-
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 고객·가격 | 고객 마스터, **신용한도 관리**, 가격 조건표 |
-| 수주 프로세스 | 견적 → SO → **ATP 가용확인** → 상태관리 → PP 생산연동 |
-| 출하·배송 | 출하/피킹, 부분출하, 배송추적, **납기약속(CRD)**, 반품, 포장명세서, **AS 접수** |
-| 청구·채권 | 청구서, 매출세금계산서, 수금, **선수금 관리**, 채권 Aging |
-| 영업관리 | **영업사원 등록 · 실적 분석** |
-| 영업 분석 | 매출 목표, 추이, 고객·품목, 반품, 수익성 BI |
+| 파일 | page_key |
+|------|----------|
+| MM 자재관리 | `mm` |
+| SD 판매출하 | `sd` |
+| PP 생산계획 | `pp` |
+| QM 품질관리 | `qm` |
+| WM 창고관리 | `wm` |
+| TM 운송관리 | `tm` |
+| SCM 공식계산기 | `calc` |
+| AI 수요예측 | `ai` |
 
 ---
 
-### 🏭 PP — Production Planning (생산계획)
+## 🌐 외부 API 연동 (`api_client.py`)
 
-생산 계획부터 실적까지 제조 전 과정을 관리합니다.
+| API | 용도 |
+|-----|------|
+| 한국은행 ECOS | 일별 환율 조회 |
+| 관세청 UNI-PASS | 과세환율 · HS Code 세율 · 화물 통관진행 조회 |
+| 전략물자관리원 YESTRADE | 전략물자 해당 여부 판정 |
+| 관세청 FTA 포털 | FTA 협정세율 조회 |
 
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 기준정보 | BOM, 공정 라우팅, 작업장, **외주(Subcontracting)** |
-| 생산계획·WO | 생산계획, 작업지시(WO), 생산실적, 진행 현황, **S&OP** |
-| MRP | MRP 소요량 계산, 발주요청, 다단계 BOM 전개 |
-| 생산 분석 | 생산 추이, 작업장 부하, 품질·불량, 간트차트, CRP, OEE |
-
----
-
-### 🔬 QM — Quality Management (품질관리)
-
-입고/공정/출하 검사와 부적합 관리를 담당합니다.
-
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 검사 기준 | 검사 계획, 검사 스펙 |
-| 품질검사 | 검사 등록, 성적서(COA), 검사 이력 |
-| 부적합·CAPA | NC 등록, CAPA 관리, **8D 리포트**, 부적합 현황 |
-| 고객 클레임 | 클레임 접수·처리 |
-| 교정 관리 | 측정기기 교정 계획·이력 |
-| **공급사 감사** | 감사 계획 → 실시 → 결과 분석 |
-| 품질 분석 | 합격률, SPC, 불량 파레토, 공급사별 품질 |
+API 키는 관리자 페이지 → TM 모듈의 **API 설정** 탭에서 DB에 저장하여 관리합니다.
 
 ---
 
-### 📦 WM — Warehouse Management (창고관리)
+## 🗄️ DB 마이그레이션
 
-입출고, 재고, 실사, 예측까지 창고 전 업무를 처리합니다.
+기존 `scm.db`(SQLite)에서 운영 MySQL로 전환하거나 스키마를 업데이트할 때 사용합니다.
 
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 기준정보 | 창고·빈 마스터, **Putaway 위치최적화(ABC 룰)** |
-| 입출고 | ASN, 입하검사, 출하(Delivery), **피킹 웨이브(Wave Picking)** |
-| 재고 관리 | 재고 조회, 이동, 가격 재평가, 예약 |
-| 실사·폐기 | 재고 실사, 차이 조정, 폐기 처리 |
-| 분석·예측 | 재고 현황 BI, ABC 분석, 수요 예측 |
-
----
-
-### 🚢 TM — Transportation & Trade Management (운송/수출입)
-
-국제 물류와 무역 관련 업무를 통합 처리합니다.
-
-| 대분류 | 세부 기능 |
-|--------|-----------|
-| 기준·설정 | API 설정(한국은행/관세청), 환율 관리, HS Code, FTA, 포워더 |
-| 수출입 업무 | CI/B·L, 수입신고, 수출면장, 수출 P/L, 수입요건, 전략물자, 원산지(C/O) |
-| 운송·결제 | L/C, 컨테이너, 화물 추적, 관세 납부, 무역결제, 보험, 수출환급금 |
-| 무역 분석 | 환율 분석, 국가별 통계, 통관 BI |
-
----
-
-## DB 스키마
-
-SQLite 단일 파일(`scm.db`)에 **59개 테이블**이 저장됩니다.
-
-### 주요 컬럼 주의사항
-
-| 테이블 | 컬럼명 | 주의 |
-|--------|--------|------|
-| `suppliers` | `name` | `supplier_name` 아님 |
-| `exchange_rates` | `rate_to_krw` | `rate` 아님 |
-| `exchange_rates` | `rate_date` | `created_at` 아님 |
-| `export_declarations` | `decl_number` | `export_declaration_number` 아님 |
-| `import_declarations` | `invoice_value` | `cif_value` 아님 |
-| `export_declarations` | `invoice_value` | `fob_value` 아님 |
-
-### 테이블 분류
-
-**MM** — suppliers, materials, purchase_requests, quotations, supplier_contracts, purchase_orders, goods_receipts, invoice_verifications, supplier_evaluations, purchase_info_records, blanket_orders, blanket_order_releases, vmi_agreements, vmi_replenishments, purchase_tax_invoices, payment_schedule, po_change_log, po_receipt_summary, alternative_materials, return_to_vendor, moving_avg_price, purchase_approvals
-
-**SD** — customers, sd_quotations, sales_orders, deliveries, invoices, returns, prepayments, as_requests, sales_reps, price_conditions, partial_deliveries
-
-**PP** — production_plans, bom, mrp_requests, work_orders, production_results, subcon_orders, sop_plans, routing, work_centers
-
-**QM** — quality_inspections, nonconformance, instruments, d8_reports, supplier_audits, audit_findings, capa, claims, inspection_plans
-
-**WM** — warehouses, storage_bins, inventory, stock_movements, asn, inbound_inspection, disposal, putaway_rules, putaway_tasks, pick_waves, pick_wave_lines
-
-**TM** — logistics, freight_orders, commercial_invoices, import_declarations, export_declarations, exchange_rates, hs_codes, fta_agreements, letters_of_credit, containers, shipment_events, trade_payments, trade_insurance, export_refunds, forwarders, customs_payments, origin_certificates, import_requirements, strategic_goods_checks, tax_invoices, settlements
-
----
-
-## 디자인 시스템
-
-`utils/design.py`에서 전역 관리합니다.
-
-### 테마
-
-- **스타일**: Notion 라이트 (화이트 배경 + 그레이 보더)
-- **폰트**: `Inter` (숫자·영문) + `Noto Sans KR` (한글)
-
-### 색상 팔레트
-
-| 용도 | 값 |
-|------|----|
-| Primary Blue | `#2383e2` |
-| Success Green | `#0f9960` |
-| Warning Orange | `#cb912f` |
-| Danger Red | `#d44c47` |
-| Purple | `#9065b0` |
-| 배경 | `#ffffff` / `#f7f7f5` |
-| 보더 | `#e9e9e7` / `#d3d3cf` |
-
-### 주요 함수
-
-```python
-from utils.design import inject_css, apply_plotly_theme, section_title, kpi_card
-
-inject_css()             # 전역 CSS 주입
-apply_plotly_theme()     # Plotly notion_light 테마 적용
-section_title("레이블")  # 섹션 구분 헤더
-kpi_card(icon, label, value, sub, badge, badge_type)  # KPI 카드 HTML
+```bash
+python fix_db.py
 ```
 
-> **필수** 각 페이지에서 `st.title()` 바로 다음에 아래 두 줄을 반드시 호출해야 합니다.
-> ```python
-> inject_css()
-> apply_plotly_theme()
-> ```
-
-### Plotly 주의사항
-
-- `bgcolor='transparent'` 사용 불가 → `'rgba(0,0,0,0)'` 사용
-- `fillgradient` 구버전 미지원 → `fillcolor='rgba(...)'` 사용
-- SQL 별칭에 `/` 포함 시 반드시 큰따옴표로 감싸야 함  
-  예: `` AS "C/O번호" ``
+주요 마이그레이션 항목: `invoice_verifications`, `supplier_evaluations`, `purchase_tax_invoices`, `materials`, `purchase_orders`, `goods_receipts`, 신규 테이블(`blanket_orders`, `purchase_approvals`, `po_change_log`, `purchase_info_records` 등)
 
 ---
 
-## 외부 API 연동
+## 🎨 디자인 시스템
 
-| API | 용도 | 설정 위치 |
-|-----|------|-----------|
-| 한국은행 Open API | 실시간 환율 조회 | TM → 기준·설정 → API 설정 |
-| 관세청 UNI-PASS | 과세환율·통관 정보 | TM → 기준·설정 → API 설정 |
+`utils/design.py`의 Notion 스타일 테마를 전 페이지에 일관 적용합니다.
+
+```python
+from utils.design import inject_css, apply_plotly_theme, page_header, section_title, kpi_card
+
+inject_css()           # 전역 CSS 주입
+apply_plotly_theme()   # Plotly 차트 테마 적용
+page_header("🛒", "MM 자재관리", "구매·조달 전 프로세스 관리")
+section_title("구매요청 목록")
+```
 
 ---
 
-## 알려진 제한사항
+## 🛠️ 각 페이지에 권한 체크 추가하는 방법
 
-- SQLite 특성상 **동시 다중 사용자 환경에는 적합하지 않습니다**.  
-  운영 환경에서는 PostgreSQL 전환을 권장합니다.
-- `scm.db`를 삭제하면 모든 데이터가 초기화됩니다.  
-  운영 데이터는 별도 백업이 필요합니다.
-- 일부 BI 차트는 데이터가 없을 때 샘플 데이터로 표시됩니다.
+```python
+from utils.auth import require_permission, has_permission, render_sidebar_user
+
+render_sidebar_user()        # 사이드바 사용자 정보 + 로그아웃
+require_permission("mm")     # 읽기 권한 없으면 자동 차단
+
+# 쓰기 권한이 필요한 폼/버튼
+can_write = has_permission("mm", write=True)
+submitted = st.form_submit_button("저장", disabled=not can_write)
+```
+
+---
+
+## 📋 기술 스택
+
+| 구분 | 사용 기술 |
+|------|-----------|
+| Frontend / UI | Streamlit, Plotly, Inter / Noto Sans KR 폰트 |
+| Backend / DB | Python 3.10+, MySQL (운영) / SQLite (개발) |
+| 인증 | bcrypt, Streamlit session_state |
+| 외부 연동 | requests, xml.etree (한국은행·관세청·전략물자관리원 API) |
+| 패키지 | pymysql, pandas, bcrypt, plotly |
+
+---
+
+## ⚠️ 주의사항
+
+- 운영 환경에서는 반드시 환경변수로 DB 접속 정보를 관리하고, 소스코드에 직접 기재하지 마세요.
+- 신규 사용자는 가입 후 관리자가 권한을 부여해야 페이지에 접근할 수 있습니다.
