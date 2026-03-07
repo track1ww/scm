@@ -184,7 +184,7 @@ submitted = st.form_submit_button("저장", disabled=not can_write)
 | 구분 | 사용 기술 |
 |------|-----------|
 | Frontend / UI | Streamlit, Plotly, Inter / Noto Sans KR 폰트 |
-| Backend / DB | Python 3.10+, MySQL (운영) / SQLite (개발) |
+| Backend / DB | Python 3.10+, MySQL (운영)|
 | 인증 | bcrypt, Streamlit session_state |
 | 외부 연동 | requests, xml.etree (한국은행·관세청·전략물자관리원 API) |
 | 패키지 | pymysql, pandas, bcrypt, plotly |
