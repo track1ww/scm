@@ -30,7 +30,7 @@ scm_sap/
 │   └── 9_👑_관리자.py
 ├── fix_db.py                     # DB 마이그레이션 스크립트
 ├── api_client.py                 # 외부 API 연동 모듈
-└── scm.db                        # SQLite 개발용 DB (운영은 MySQL)
+└── scm.db                        # 개발용 DB (운영은 MySQL)
 ```
 
 ---
