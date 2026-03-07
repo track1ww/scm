@@ -130,13 +130,16 @@ section.main {
     border-color: var(--border-strong) !important;
     box-shadow: var(--shadow-sm) !important;
 }
-[data-testid="stButton"] > button[kind="primary"] {
+[data-testid="stButton"] > button[kind="primary"],
+[data-testid="stFormSubmitButton"] > button,
+[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
     background: #c9b8e8 !important;
     color: #3d2b6b !important;
     border: none !important;
     font-weight: 600 !important;
 }
-[data-testid="stButton"] > button[kind="primary"]:hover {
+[data-testid="stButton"] > button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
     background: #b8a4de !important;
     box-shadow: var(--shadow-sm) !important;
 }
