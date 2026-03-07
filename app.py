@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, date
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.db import get_db, init_db
 from utils.design import inject_css, apply_plotly_theme, section_title
+from utils.auth import is_logged_in, render_sidebar_user
 
 st.set_page_config(
     page_title="SCM 통합관리",
@@ -16,6 +17,72 @@ st.set_page_config(
 init_db()
 inject_css()
 apply_plotly_theme()
+
+# ── 로그인 체크 ───────────────────────────────────────
+if not is_logged_in():
+    from utils.auth import login_user, register_user, get_allowed_domains
+
+    # 사이드바 숨기기
+    st.markdown("""<style>
+    [data-testid="stSidebar"] {display:none}
+    [data-testid="collapsedControl"] {display:none}
+    </style>""", unsafe_allow_html=True)
+
+    # 중앙 로그인 UI
+    col_l, col_c, col_r = st.columns([1, 1.2, 1])
+    with col_c:
+        st.markdown("""
+        <div style="text-align:center;padding:48px 0 28px">
+            <div style="font-size:2.8rem;margin-bottom:10px">⛓</div>
+            <div style="font-size:1.55rem;font-weight:800;color:#1a1a1a;
+                        letter-spacing:-.03em">SCM 통합관리 시스템</div>
+            <div style="font-size:0.82rem;color:#9b9b9b;margin-top:6px">
+                사내 이메일로 로그인하세요
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        tab_login, tab_register = st.tabs(["🔑 로그인", "✏️ 회원가입"])
+
+        with tab_login:
+            with st.form("main_login"):
+                email    = st.text_input("이메일", placeholder="you@company.com")
+                password = st.text_input("비밀번호", type="password")
+                submitted = st.form_submit_button("로그인", use_container_width=True, type="primary")
+            if submitted:
+                if not email or not password:
+                    st.error("이메일과 비밀번호를 입력하세요.")
+                else:
+                    ok, msg = login_user(email, password)
+                    if ok:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        with tab_register:
+            domains = get_allowed_domains()
+            if domains:
+                st.info(f"가입 가능 도메인: {', '.join(['@'+d for d in domains])}")
+            with st.form("main_register"):
+                r_name = st.text_input("이름")
+                r_email = st.text_input("사내 이메일", placeholder="you@company.com")
+                r_dept  = st.text_input("부서 (선택)")
+                r_pw    = st.text_input("비밀번호 (8자 이상)", type="password")
+                r_pw2   = st.text_input("비밀번호 확인", type="password")
+                submitted_r = st.form_submit_button("가입 신청", use_container_width=True, type="primary")
+            if submitted_r:
+                if not all([r_name, r_email, r_pw, r_pw2]):
+                    st.error("모든 항목을 입력하세요.")
+                elif r_pw != r_pw2:
+                    st.error("비밀번호가 일치하지 않습니다.")
+                else:
+                    ok, msg = register_user(r_email, r_name, r_pw, r_dept)
+                    st.success(msg) if ok else st.error(msg)
+
+    st.stop()
+
+# ── 사이드바 사용자 정보 ──────────────────────────────
+render_sidebar_user()
 
 try:
     import plotly.graph_objects as go

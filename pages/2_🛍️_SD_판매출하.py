@@ -1,3 +1,16 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Mar  7 13:42:40 2026
+
+@author: yuns
+"""
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Mar  7 13:45:08 2026
+
+@author: yuns
+"""
+
 import streamlit as st
 import pandas as pd
 import sys, os
@@ -443,7 +456,8 @@ with tabs["ar"]:
                 ra2=st.number_input("수금금액",min_value=0.0,format="%.0f",value=float(psd['total_amount'])); rd2=st.date_input("수금일"); pm2=st.selectbox("수금방법",["계좌이체","현금","카드","어음"]); br=st.text_input("은행 참조번호"); nar=st.text_area("비고",height=40)
                 if st.form_submit_button("✅ 수금 처리",use_container_width=True):
                     try:
-                        conn=get_db(); conn.execute("INSERT INTO ar_receipts(receipt_number,sti_id,customer_name,receipt_amount,receipt_date,payment_method,bank_ref,note) VALUES(?,?,?,?,?,?,?,?)",(gen_number("RCP"),psd['id'],psd['customer_name'],ra2,str(rd2),pm2,br,nar))
+                        conn=get_db(); conn.execute("INSERT INTO ar_receipts(receipt_number,sti_id,customer_name,amount,receipt_amount,receipt_date,payment_method,bank_ref,note) VALUES(?,?,?,?,?,?,?,?,?)",
+    (gen_number("RCP"),psd['id'],psd['customer_name'],psd['total_amount'],ra2,str(rd2),pm2,br,nar))
                         conn.execute("UPDATE sales_tax_invoices SET payment_status='수금완료',paid_at=? WHERE id=?",(str(rd2),psd['id'])); conn.commit(); conn.close(); st.success("수금 완료!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
     with col_list:
@@ -820,12 +834,12 @@ with tabs["bi_target"]:
                        target_qty AS 목표수량, channel AS 채널
                 FROM sales_targets ORDER BY year,month""", conn)
             df_act=pd.read_sql_query("""
-                SELECT substr(ordered_at,1,4) AS year,
-                       CAST(substr(ordered_at,6,2) AS INTEGER) AS month,
-                       ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 실적금액,
-                       SUM(quantity) AS 실적수량
-                FROM sales_orders WHERE status!='취소'
-                GROUP BY substr(ordered_at,1,4),substr(ordered_at,6,2)""", conn)
+                                     SELECT substr(ordered_at,1,4) AS year,
+                                     CAST(substr(ordered_at,6,2) AS UNSIGNED) AS month, -- MySQL은 UNSIGNED/SIGNED 사용
+                                     ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 실적금액,
+                                     SUM(quantity) AS 실적수량
+                                     FROM sales_orders WHERE status!='취소'
+                                     GROUP BY year, month""", conn) # 별칭(year, month)을 그대로 사용
             conn.close()
 
             if df_tgt.empty: st.info("목표 없음 — 좌측에서 목표를 등록하세요")
