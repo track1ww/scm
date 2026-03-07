@@ -1,7 +1,9 @@
 # ⛓ SCM 통합관리 시스템
 
 사내 공급망 전 영역(구매 → 생산 → 품질 → 창고 → 운송 → 판매)을 하나의 웹 애플리케이션에서 관리하는 **경량화 SCM 솔루션**입니다.  
-Streamlit + MySQL 기반으로 별도 서버 없이 사내 배포가 가능합니다.
+Streamlit + MySQL 기반입니다. 클라우드를 생각했으나 데이터 주권이나 비용면에서는 사내 서버에서 추가비용없이 사용이 가능했으면 좋겠다고 생각했습니다.
+
+
 
 <img width="1812" height="994" alt="화면 캡처 2026-03-07 171630" src="https://github.com/user-attachments/assets/f346de47-9cbf-4f4a-b097-74d8908eeba1" />
 
