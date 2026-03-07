@@ -46,9 +46,12 @@ class _Row:
     def __init__(self, d): self._d = d; self._v = list(d.values())
     def __getitem__(self, k): return self._v[k] if isinstance(k,int) else self._d[k]
     def __iter__(self): return iter(self._v)
+    def __len__(self): return len(self._v)
     def __contains__(self, k): return k in self._d
     def get(self, k, default=None): return self._d.get(k, default)
     def keys(self): return self._d.keys()
+    def values(self): return self._d.values()
+    def items(self): return self._d.items()
     def __repr__(self): return repr(self._d)
 
 class _Cur:

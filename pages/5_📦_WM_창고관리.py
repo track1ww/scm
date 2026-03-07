@@ -67,11 +67,11 @@ with tabs["wh"]:
                     conn.execute("""INSERT INTO warehouses
                         (warehouse_code,warehouse_name,location,warehouse_type,capacity)
                         VALUES(?,?,?,?,?)
-                        ON CONFLICT(warehouse_code) DO UPDATE SET
-                        warehouse_name=excluded.warehouse_name,
-                        location=excluded.location,
-                        warehouse_type=excluded.warehouse_type,
-                        capacity=excluded.capacity""",
+                        ON DUPLICATE KEY UPDATE
+                        warehouse_name=VALUES(warehouse_name),
+                        location=VALUES(location),
+                        warehouse_type=VALUES(warehouse_type),
+                        capacity=VALUES(capacity)""",
                         (wh_code, wh_name, location, wh_type, capacity))
                     conn.commit(); conn.close()
                     st.success("창고 등록 완료!"); st.rerun()
@@ -110,7 +110,7 @@ with tabs["wh"]:
                     conn.execute("""INSERT INTO storage_bins
                         (bin_code,warehouse_id,zone,bin_type,max_weight)
                         VALUES(?,?,?,?,?)
-                        ON CONFLICT(bin_code) DO NOTHING""",
+                        ON DUPLICATE KEY UPDATE warehouse_id=VALUES(warehouse_id)""",
                         (bin_code, wh_opts.get(wh_sel), zone, bin_type, max_wt))
                     conn.commit(); conn.close()
                     st.success("Bin 등록 완료!"); st.rerun()
@@ -267,13 +267,13 @@ with tabs["stock"]:
                         (item_code,item_name,category,warehouse_id,warehouse,bin_code,
                          stock_qty,system_qty,unit_price,min_stock)
                         VALUES(?,?,?,?,?,?,?,?,?,?)
-                        ON CONFLICT(item_code) DO UPDATE SET
-                        item_name=excluded.item_name, category=excluded.category,
-                        warehouse_id=excluded.warehouse_id, warehouse=excluded.warehouse,
-                        bin_code=excluded.bin_code, stock_qty=excluded.stock_qty,
-                        system_qty=excluded.system_qty, unit_price=excluded.unit_price,
-                        min_stock=excluded.min_stock,
-                        updated_at=datetime('now','localtime')""",
+                        ON DUPLICATE KEY UPDATE
+                        item_name=VALUES(item_name), category=VALUES(category),
+                        warehouse_id=VALUES(warehouse_id), warehouse=VALUES(warehouse),
+                        bin_code=VALUES(bin_code), stock_qty=VALUES(stock_qty),
+                        system_qty=VALUES(system_qty), unit_price=VALUES(unit_price),
+                        min_stock=VALUES(min_stock),
+                        updated_at=NOW()""",
                         (item_code, item_name, category, wh_id, wh_name, bin_input,
                          stock_qty, sys_qty, unit_price, min_stock))
                     conn.commit(); conn.close()
@@ -439,9 +439,9 @@ with tabs["lot"]:
         df_lot = pd.read_sql_query("""
             SELECT item_name AS 품목, lot_number AS LOT번호, serial_number AS 시리얼,
                    stock_qty AS 재고, expiry_date AS 유통기한,
-                   CAST(julianday(expiry_date)-julianday('now') AS INTEGER) AS 잔여일,
+                   CAST(DATEDIFF(expiry_date, CURDATE()) AS SIGNED) AS 잔여일,
                    warehouse AS 창고
-            FROM inventory WHERE lot_number IS NOT NULL AND lot_number!=''
+            FROM inventory WHERE lot_number IS NOT NULL AND CHAR_LENGTH(lot_number)>0
             ORDER BY expiry_date""", conn)
         conn.close()
         if df_lot.empty: st.info("LOT 등록 없음")
@@ -502,7 +502,7 @@ with tabs["issue"]:
             SELECT movement_number AS 출고번호, item_name AS 품목,
                    quantity AS 수량, reference_number AS 참조,
                    created_at AS 출고일
-            FROM stock_movements WHERE movement_type LIKE '출고%'
+            FROM stock_movements WHERE movement_type LIKE '출고%%'
             ORDER BY id DESC LIMIT 50""", conn)
         conn.close()
         if df_iss.empty: st.info("출고 이력 없음")
@@ -513,7 +513,7 @@ with tabs["issue"]:
         df_fefo = pd.read_sql_query("""
             SELECT item_name AS 품목, lot_number AS LOT, stock_qty AS 재고,
                    expiry_date AS 유통기한,
-                   CAST(julianday(expiry_date)-julianday('now') AS INTEGER) AS 잔여일,
+                   CAST(DATEDIFF(expiry_date, CURDATE()) AS SIGNED) AS 잔여일,
                    warehouse AS 창고
             FROM inventory WHERE stock_qty>0 AND expiry_date IS NOT NULL
             ORDER BY expiry_date, item_name""", conn)
@@ -591,7 +591,7 @@ with tabs["bi"]:
                                       LEFT JOIN (SELECT item_code, new_avg_price AS new_avg FROM moving_avg_price
                                                  WHERE id IN (SELECT MAX(id) FROM moving_avg_price GROUP BY item_code)) m
                                              ON i.item_code=m.item_code""").fetchone()[0]
-        move_cnt    = conn.execute("SELECT COUNT(*) FROM stock_movements WHERE created_at>=date('now','-30 days')").fetchone()[0]
+        move_cnt    = conn.execute("SELECT COUNT(*) FROM stock_movements WHERE created_at>=DATE_SUB(CURDATE(), INTERVAL 30 DAY)").fetchone()[0]
 
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("보유 품목수", f"{total_items}개")
@@ -673,8 +673,8 @@ with tabs["bi"]:
                    ROUND(SUM(g.received_qty-g.rejected_qty)*1.0/NULLIF(COALESCE(i.stock_qty,0),0),2) AS 회전율
             FROM goods_receipts g
             LEFT JOIN inventory i ON g.item_name=i.item_code
-            WHERE g.created_at>=date('now','-90 days')
-            GROUP BY g.item_name HAVING 현재고>0
+            WHERE g.created_at>=DATE_SUB(CURDATE(), INTERVAL 90 DAY)
+            GROUP BY g.item_name, i.stock_qty HAVING COALESCE(i.stock_qty,0)>0
             ORDER BY 회전율 DESC LIMIT 15""", conn)
         if not df_turn.empty:
             fig4 = px.bar(df_turn, x='품목', y='회전율',
@@ -730,10 +730,10 @@ with tabs["pred"]:
             with col_p2:
                 # 월별 수요(입고) 집계
                 df_demand = pd.read_sql_query("""
-                    SELECT substr(created_at,1,7) AS 월,
+                    SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS 월,
                            SUM(received_qty-rejected_qty) AS 수요량
                     FROM goods_receipts WHERE item_name=?
-                    GROUP BY substr(created_at,1,7) ORDER BY 월""",
+                    GROUP BY DATE_FORMAT(created_at,'%%Y-%%m') ORDER BY 월""",
                     conn, params=[sel_pred])
 
                 if len(df_demand) < 2:
@@ -818,12 +818,12 @@ with tabs["pred"]:
             SELECT i.item_code AS 자재코드, i.item_name AS 품목,
                    i.warehouse AS 창고, i.stock_qty AS 재고수량,
                    MAX(sm.created_at) AS 마지막이동일,
-                   CAST(julianday('now')-julianday(MAX(sm.created_at)) AS INTEGER) AS 미이동일수
+                   CAST(DATEDIFF(CURDATE(), MAX(sm.created_at)) AS SIGNED) AS 미이동일수
             FROM inventory i
             LEFT JOIN stock_movements sm ON i.item_name=sm.item_name
             WHERE i.stock_qty>0
-            GROUP BY i.item_code, i.warehouse
-            ORDER BY 미이동일수 DESC NULLS LAST""", conn)
+            GROUP BY i.item_code, i.item_name, i.warehouse, i.stock_qty
+            ORDER BY 미이동일수 DESC""", conn)
 
         if df_risk.empty:
             st.info("재고 데이터 없음")
@@ -882,28 +882,7 @@ with tabs["pred"]:
 
 # ══ Putaway 위치 최적화 ══════════════════════════════════════════
 with tabs["putaway"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS putaway_rules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_name TEXT, item_category TEXT,
-            preferred_zone TEXT, preferred_bin TEXT,
-            priority INTEGER DEFAULT 1,
-            rule_type TEXT DEFAULT 'ABC',
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS putaway_tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_number TEXT UNIQUE,
-            item_name TEXT, lot_number TEXT,
-            quantity INTEGER DEFAULT 0,
-            from_location TEXT DEFAULT '입고대기',
-            to_zone TEXT, to_bin TEXT,
-            assigned_to TEXT,
-            status TEXT DEFAULT '대기',
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: putaway_rules, putaway_tasks 테이블은 db.py init_db()에서 이미 생성됨
 
     col_l, col_r = st.columns([1,2])
     with col_l:
@@ -980,30 +959,7 @@ with tabs["putaway"]:
 
 # ══ 피킹 웨이브 관리 ══════════════════════════════════════════
 with tabs["wave"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS pick_waves (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            wave_number TEXT UNIQUE,
-            wave_date TEXT,
-            wave_type TEXT DEFAULT '배치',
-            picker TEXT,
-            total_lines INTEGER DEFAULT 0,
-            picked_lines INTEGER DEFAULT 0,
-            status TEXT DEFAULT '대기',
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS pick_wave_lines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            wave_id INTEGER,
-            delivery_id INTEGER,
-            item_name TEXT, bin_location TEXT,
-            required_qty INTEGER DEFAULT 0,
-            picked_qty INTEGER DEFAULT 0,
-            status TEXT DEFAULT '대기',
-            FOREIGN KEY(wave_id) REFERENCES pick_waves(id))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: pick_waves, pick_wave_lines 테이블은 db.py init_db()에서 이미 생성됨
 
     st.subheader("🌊 피킹 웨이브 관리")
     st.caption("복수 출하건을 묶어 최적 동선으로 일괄 피킹")
@@ -1048,7 +1004,7 @@ with tabs["wave"]:
             SELECT w.wave_number AS 웨이브번호, w.wave_date AS 피킹일,
                    w.wave_type AS 유형, w.picker AS 피커,
                    w.total_lines AS 전체, w.picked_lines AS 완료,
-                   ROUND(w.picked_lines*100.0/MAX(w.total_lines,1),1) AS 진척률,
+                   ROUND(w.picked_lines*100.0/GREATEST(w.total_lines,1),1) AS 진척률,
                    w.status AS 상태
             FROM pick_waves w ORDER BY w.id DESC LIMIT 30""", conn)
         conn.close()

@@ -17,10 +17,10 @@ from utils.db import get_db
 def _ensure_api_settings_table():
     conn = get_db()
     conn.execute("""CREATE TABLE IF NOT EXISTS api_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key_name TEXT UNIQUE NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        key_name VARCHAR(100) UNIQUE NOT NULL,
         key_value TEXT NOT NULL,
-        updated_at TEXT DEFAULT (datetime('now','localtime'))
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
     conn.commit()
     conn.close()
@@ -36,8 +36,8 @@ def save_api_key(key_name: str, key_value: str):
     _ensure_api_settings_table()
     conn = get_db()
     conn.execute("""INSERT INTO api_settings(key_name, key_value)
-        VALUES(?,?) ON CONFLICT(key_name) DO UPDATE SET
-        key_value=excluded.key_value, updated_at=datetime('now','localtime')""",
+        VALUES(?,?) ON DUPLICATE KEY UPDATE
+        key_value=VALUES(key_value), updated_at=NOW()""",
         (key_name, key_value))
     conn.commit()
     conn.close()
@@ -522,9 +522,9 @@ def save_tariff_to_db(hs_code: str, tariff_data: dict) -> bool:
     conn.execute("""INSERT INTO hs_codes
         (hs_code, description, import_duty_rate, vat_rate, unit)
         VALUES(?,?,?,?,?)
-        ON CONFLICT(hs_code) DO UPDATE SET
-        description=excluded.description, import_duty_rate=excluded.import_duty_rate,
-        vat_rate=excluded.vat_rate, unit=excluded.unit""",
+        ON DUPLICATE KEY UPDATE
+        description=VALUES(description), import_duty_rate=VALUES(import_duty_rate),
+        vat_rate=VALUES(vat_rate), unit=VALUES(unit)""",
         (hs_code, tariff_data.get("description",""),
          tariff_data.get("import_duty_rate",0.0),
          tariff_data.get("vat_rate",10.0),

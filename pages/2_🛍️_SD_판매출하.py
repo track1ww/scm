@@ -24,34 +24,9 @@ def _add_col(table, col, col_type="TEXT"):
         conn = get_db(); conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"); conn.commit(); conn.close()
     except: pass
 
-def init_sd_extra():
-    conn = get_db(); c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS price_conditions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER,
-        item_name TEXT NOT NULL, price_type TEXT DEFAULT '기본단가',
-        unit_price REAL NOT NULL, discount_rate REAL DEFAULT 0,
-        valid_from TEXT, valid_to TEXT, currency TEXT DEFAULT 'KRW',
-        min_qty INTEGER DEFAULT 1, note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS sales_tax_invoices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, sti_number TEXT UNIQUE NOT NULL,
-        order_id INTEGER, customer_id INTEGER, customer_name TEXT, tax_invoice_no TEXT,
-        supply_amount REAL NOT NULL, tax_amount REAL NOT NULL, total_amount REAL NOT NULL,
-        issue_date TEXT, due_date TEXT, payment_terms TEXT DEFAULT '30일',
-        payment_method TEXT DEFAULT '계좌이체', payment_status TEXT DEFAULT '미수금', paid_at TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS ar_receipts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_number TEXT UNIQUE NOT NULL,
-        sti_id INTEGER, customer_id INTEGER, customer_name TEXT,
-        receipt_amount REAL NOT NULL, receipt_date TEXT,
-        payment_method TEXT DEFAULT '계좌이체', bank_ref TEXT, note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    conn.commit(); conn.close()
-
-try: init_sd_extra()
-except: pass
+# MySQL: db.py init_db()에서 모든 테이블 생성 — 중복 CREATE TABLE 불필요
 _add_col("deliveries","customer_name"); _add_col("deliveries","address")
-_add_col("deliveries","actual_delivery"); _add_col("customers","payment_terms","TEXT DEFAULT '30일'")
+_add_col("deliveries","actual_delivery"); _add_col("customers","payment_terms","VARCHAR(50) DEFAULT '30일'")
 _add_col("customers","tax_number"); _add_col("customers","region")
 
 st.title("🛍️ SD – Sales & Distribution (판매/출하/청구)")
@@ -112,7 +87,8 @@ with tabs["cust"]:
                     try:
                         conn=get_db()
                         conn.execute("""INSERT INTO customers(customer_code,customer_name,contact,phone,email,address,customer_group,credit_limit,status,tax_number,region,payment_terms)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(customer_code) DO UPDATE SET customer_name=excluded.customer_name,contact=excluded.contact,phone=excluded.phone,email=excluded.email,address=excluded.address,customer_group=excluded.customer_group,credit_limit=excluded.credit_limit,status=excluded.status,tax_number=excluded.tax_number,region=excluded.region,payment_terms=excluded.payment_terms""",
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                            ON DUPLICATE KEY UPDATE customer_name=VALUES(customer_name),contact=VALUES(contact),phone=VALUES(phone),email=VALUES(email),address=VALUES(address),customer_group=VALUES(customer_group),credit_limit=VALUES(credit_limit),status=VALUES(status),tax_number=VALUES(tax_number),region=VALUES(region),payment_terms=VALUES(payment_terms)""",
                             (cust_code,cust_name,contact,phone,email,address,cust_grp,credit,status,tax_num,region,pay_terms))
                         conn.commit(); conn.close(); st.success("저장!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
@@ -276,7 +252,7 @@ with tabs["bi_so"]:
         c1,c2,c3,c4=st.columns(4); c1.metric("수주건수",f"{sc}건"); c2.metric("수주금액",f"₩{sa:,.0f}"); c3.metric("평균금액",f"₩{round(sa/sc,0) if sc else 0:,.0f}"); c4.metric("취소",f"{cc}건",delta_color="inverse")
         col_l,col_r=st.columns(2)
         with col_l:
-            df_t=pd.read_sql_query(f"SELECT substr(ordered_at,1,7) AS 월,ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 수주금액,COUNT(*) AS 건수 FROM sales_orders WHERE status!='취소' AND ordered_at>='{bi_from}' GROUP BY substr(ordered_at,1,7) ORDER BY 월",conn)
+            df_t=pd.read_sql_query(f"SELECT DATE_FORMAT(ordered_at,'%%Y-%%m') AS 월,ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 수주금액,COUNT(*) AS 건수 FROM sales_orders WHERE status!='취소' AND ordered_at>='{bi_from}' GROUP BY DATE_FORMAT(ordered_at,'%%Y-%%m') ORDER BY 월",conn)
             if not df_t.empty:
                 fig=make_subplots(specs=[[{"secondary_y":True}]])
                 fig.add_trace(go.Bar(x=df_t['월'],y=df_t['수주금액'],name='수주금액',marker_color='#8b5cf6'),secondary_y=False)
@@ -328,7 +304,7 @@ with tabs["track"]:
             st.dataframe(df_tr,use_container_width=True,hide_index=True)
             if r['상태']!='배송완료':
                 if st.button("📦 배달완료 처리"):
-                    conn2=get_db(); conn2.execute("UPDATE deliveries SET status='배송완료',actual_delivery=date('now') WHERE tracking_number=?",(tn,)); conn2.commit(); conn2.close(); st.success("완료!"); st.rerun()
+                    conn2=get_db(); conn2.execute("UPDATE deliveries SET status='배송완료',actual_delivery=CURDATE() WHERE tracking_number=?",(tn,)); conn2.commit(); conn2.close(); st.success("완료!"); st.rerun()
         else: st.warning("조회 결과 없음")
     else:
         df_ad=pd.read_sql_query("SELECT d.delivery_number AS 출하번호,o.customer_name AS 고객,d.item_name AS 품목,d.carrier AS 운송사,d.tracking_number AS 운송장,d.status AS 상태,d.delivery_date AS 출하일 FROM deliveries d LEFT JOIN sales_orders o ON d.order_id=o.id WHERE d.status NOT IN ('배송완료') ORDER BY d.id DESC",conn)
@@ -469,7 +445,7 @@ with tabs["ar"]:
 # ══ 채권 Aging ══════════════════════════════════════════
 with tabs["aging"]:
     st.subheader("📋 매출채권 Aging 분석")
-    conn=get_db(); df_ag=pd.read_sql_query("SELECT customer_name AS 고객,sti_number AS 계산서,total_amount AS 금액,due_date AS 만기일,CAST(julianday('now')-julianday(due_date) AS INTEGER) AS 연체일수 FROM sales_tax_invoices WHERE payment_status='미수금' ORDER BY due_date",conn); conn.close()
+    conn=get_db(); df_ag=pd.read_sql_query("SELECT customer_name AS 고객,sti_number AS 계산서,total_amount AS 금액,due_date AS 만기일,CAST(DATEDIFF(CURDATE(),due_date) AS SIGNED) AS 연체일수 FROM sales_tax_invoices WHERE payment_status='미수금' ORDER BY due_date",conn); conn.close()
     if df_ag.empty: st.success("✅ 미수금 없음")
     else:
         def ag_b(d): return "미도래" if d<=0 else ("1~30일" if d<=30 else ("31~60일" if d<=60 else ("61~90일" if d<=90 else "90일 초과")))
@@ -495,7 +471,7 @@ with tabs["bi_ar"]:
         pi2=conn.execute(f"SELECT COALESCE(SUM(amount+tax_amount),0) FROM invoices WHERE paid=1 AND issue_date>='{bi_from}'").fetchone()[0]
         st2=conn.execute("SELECT COALESCE(SUM(total_amount),0) FROM sales_tax_invoices WHERE payment_status='미수금'").fetchone()[0]
         c1,c2,c3=st.columns(3); c1.metric("청구합계",f"₩{ti:,.0f}"); c2.metric("수금률",f"{pi2/ti*100:.1f}%" if ti else "0%"); c3.metric("미수금",f"₩{st2:,.0f}",delta_color="inverse")
-        df_it=pd.read_sql_query(f"SELECT substr(issue_date,1,7) AS 월,ROUND(SUM(amount+tax_amount),0) AS 청구금액,ROUND(SUM(CASE paid WHEN 1 THEN amount+tax_amount ELSE 0 END),0) AS 수금금액 FROM invoices WHERE issue_date>='{bi_from}' GROUP BY substr(issue_date,1,7) ORDER BY 월",conn)
+        df_it=pd.read_sql_query(f"SELECT DATE_FORMAT(issue_date,'%%Y-%%m') AS 월,ROUND(SUM(amount+tax_amount),0) AS 청구금액,ROUND(SUM(CASE paid WHEN 1 THEN amount+tax_amount ELSE 0 END),0) AS 수금금액 FROM invoices WHERE issue_date>='{bi_from}' GROUP BY DATE_FORMAT(issue_date,'%%Y-%%m') ORDER BY 월",conn)
         if not df_it.empty:
             fig=go.Figure(); fig.add_trace(go.Bar(x=df_it['월'],y=df_it['청구금액'],name='청구',marker_color='#3b82f6')); fig.add_trace(go.Bar(x=df_it['월'],y=df_it['수금금액'],name='수금',marker_color='#10b981'))
             fig.update_layout(barmode='group',title="월별 청구·수금",height=280,margin=dict(l=0,r=0,t=40,b=0),legend=dict(orientation="h",y=1.1)); st.plotly_chart(fig,use_container_width=True)
@@ -511,7 +487,7 @@ with tabs["bi_sales"]:
         bl=conn.execute(f"SELECT COALESCE(SUM(amount+tax_amount),0) FROM invoices WHERE issue_date>='{bi_from}'").fetchone()[0]
         pb=conn.execute(f"SELECT COALESCE(SUM(amount+tax_amount),0) FROM invoices WHERE paid=1 AND issue_date>='{bi_from}'").fetchone()[0]
         c1,c2,c3,c4=st.columns(4); c1.metric("수주금액",f"₩{tr:,.0f}"); c2.metric("반품차감",f"₩{ret2:,.0f}",delta_color="inverse"); c3.metric("순매출",f"₩{tr-ret2:,.0f}"); c4.metric("수금률",f"{pb/bl*100:.1f}%" if bl else "0%")
-        df_st2=pd.read_sql_query(f"SELECT substr(ordered_at,1,7) AS 월,ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 수주금액 FROM sales_orders WHERE status!='취소' AND ordered_at>='{bi_from}' GROUP BY substr(ordered_at,1,7) ORDER BY 월",conn)
+        df_st2=pd.read_sql_query(f"SELECT DATE_FORMAT(ordered_at,'%%Y-%%m') AS 월,ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 수주금액 FROM sales_orders WHERE status!='취소' AND ordered_at>='{bi_from}' GROUP BY DATE_FORMAT(ordered_at,'%%Y-%%m') ORDER BY 월",conn)
         if not df_st2.empty: st.plotly_chart(px.area(df_st2,x='월',y='수주금액',title=f"월별 매출 추이({bp})",color_discrete_sequence=['#8b5cf6']).update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
         conn.close()
 
@@ -536,10 +512,10 @@ with tabs["bi_ret"]:
         conn=get_db()
         col_l,col_r=st.columns(2)
         with col_l:
-            df_rt=pd.read_sql_query(f"SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 건수 FROM returns WHERE created_at>='{bi_from}' GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+            df_rt=pd.read_sql_query(f"SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS 월,COUNT(*) AS 건수 FROM returns WHERE created_at>='{bi_from}' GROUP BY DATE_FORMAT(created_at,'%%Y-%%m') ORDER BY 월",conn)
             st.plotly_chart((px.bar(df_rt,x='월',y='건수',title="월별 반품",color_discrete_sequence=['#ef4444']).update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)) if not df_rt.empty else _ef("반품 없음")),use_container_width=True)
         with col_r:
-            df_rr2=pd.read_sql_query(f"SELECT reason AS 사유,COUNT(*) AS 건수 FROM returns WHERE created_at>='{bi_from}' GROUP BY reason ORDER BY 건수 DESC",conn)
+            df_rr2=pd.read_sql_query(f"SELECT reason AS 사유,COUNT(*) AS 건수 FROM returns WHERE created_at>='{bi_from}' GROUP BY reason ORDER BY 건수 DESC",conn)  # noqa
             st.plotly_chart((px.pie(df_rr2,names='사유',values='건수',title="반품 사유").update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)) if not df_rr2.empty else _ef()),use_container_width=True)
         conn.close()
 
@@ -716,18 +692,7 @@ with tabs["packing"]:
     def _acd2(t,c,ct="TEXT"):
         try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
         except: pass
-    try:
-        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS packing_lists (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, pl_number TEXT UNIQUE NOT NULL,
-            delivery_id INTEGER, order_id INTEGER,
-            customer_name TEXT, item_name TEXT,
-            box_number INTEGER NOT NULL,
-            qty_per_box INTEGER NOT NULL, total_boxes INTEGER NOT NULL,
-            gross_weight REAL DEFAULT 0, net_weight REAL DEFAULT 0,
-            dimensions TEXT, marks TEXT, note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: packing_lists 테이블은 db.py init_db()에서 이미 생성됨
 
     st.subheader("📦 포장명세서 (Packing List)")
     col_form,col_list=st.columns([1,2])
@@ -797,17 +762,7 @@ with tabs["bi_target"]:
     def _acd3(t,c,ct="TEXT"):
         try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
         except: pass
-    try:
-        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS sales_targets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            year INTEGER NOT NULL, month INTEGER NOT NULL,
-            target_amount REAL NOT NULL,
-            target_qty INTEGER DEFAULT 0,
-            item_name TEXT, channel TEXT,
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: sales_targets 테이블은 db.py init_db()에서 이미 생성됨
 
     st.subheader("🎯 매출 목표 관리")
     col_form,col_bi=st.columns([1,2])
@@ -834,12 +789,12 @@ with tabs["bi_target"]:
                        target_qty AS 목표수량, channel AS 채널
                 FROM sales_targets ORDER BY year,month""", conn)
             df_act=pd.read_sql_query("""
-                                     SELECT substr(ordered_at,1,4) AS year,
-                                     CAST(substr(ordered_at,6,2) AS UNSIGNED) AS month, -- MySQL은 UNSIGNED/SIGNED 사용
-                                     ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 실적금액,
-                                     SUM(quantity) AS 실적수량
-                                     FROM sales_orders WHERE status!='취소'
-                                     GROUP BY year, month""", conn) # 별칭(year, month)을 그대로 사용
+                SELECT YEAR(ordered_at) AS year,
+                       MONTH(ordered_at) AS month,
+                       ROUND(SUM(quantity*unit_price*(1-discount_rate/100)),0) AS 실적금액,
+                       SUM(quantity) AS 실적수량
+                FROM sales_orders WHERE status!='취소'
+                GROUP BY YEAR(ordered_at), MONTH(ordered_at)""", conn)
             conn.close()
 
             if df_tgt.empty: st.info("목표 없음 — 좌측에서 목표를 등록하세요")
@@ -880,11 +835,12 @@ with tabs["credit"]:
     def _acd_sd(t,c,ct="TEXT"):
         try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
         except: pass
-    _acd_sd("customers","credit_limit","REAL DEFAULT 0")
-    _acd_sd("customers","credit_used","REAL DEFAULT 0")
-    _acd_sd("customers","credit_status","TEXT DEFAULT '정상'")
-    _acd_sd("customers","payment_terms","TEXT DEFAULT 'NET30'")
-    _acd_sd("sales_orders","sales_rep","TEXT")
+    # MySQL: customers/sales_orders 컬럼 추가 안전 시도
+    _acd_sd("customers","credit_limit","DECIMAL(18,2) DEFAULT 0")
+    _acd_sd("customers","credit_used","DECIMAL(18,2) DEFAULT 0")
+    _acd_sd("customers","credit_status","VARCHAR(20) DEFAULT '정상'")
+    _acd_sd("customers","payment_terms","VARCHAR(100) DEFAULT 'NET30'")
+    _acd_sd("sales_orders","sales_rep","VARCHAR(100)")
 
     st.subheader("💳 고객 신용한도 관리")
     col_set, col_mon = st.columns([1, 2])
@@ -920,7 +876,7 @@ with tabs["credit"]:
         conn=get_db(); df_cr=pd.read_sql_query("""
             SELECT customer_name AS 고객, credit_limit AS 한도,
                    credit_used AS 사용액,
-                   ROUND(credit_used*100.0/MAX(credit_limit,1),1) AS 사용률,
+                   ROUND(credit_used*100.0/GREATEST(credit_limit,1),1) AS 사용률,
                    credit_limit-credit_used AS 잔여한도,
                    payment_terms AS 결제조건,
                    CASE credit_status WHEN '초과' THEN '🔴 초과' WHEN '경고' THEN '🟠 경고' ELSE '🟢 정상' END AS 상태
@@ -1035,7 +991,7 @@ with tabs["crd"]:
                    CASE
                      WHEN actual_delivery_date IS NOT NULL AND actual_delivery_date<=requested_delivery THEN '✅ 준수'
                      WHEN actual_delivery_date IS NOT NULL AND actual_delivery_date>requested_delivery THEN '❌ 지연'
-                     WHEN confirmed_delivery_date<=date('now') AND status NOT IN ('배송완료') THEN '⚠️ 지연위험'
+                     WHEN confirmed_delivery_date<=CURDATE() AND status NOT IN ('배송완료') THEN '⚠️ 지연위험'
                      ELSE '🔄 진행중'
                    END AS 납기상태,
                    status AS SO상태
@@ -1055,20 +1011,7 @@ with tabs["crd"]:
 
 # ══ 선수금 관리 ══════════════════════════════════════════
 with tabs["prepay"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS prepayments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prepay_number TEXT UNIQUE,
-            order_id INTEGER, customer_name TEXT,
-            prepay_amount REAL DEFAULT 0,
-            applied_amount REAL DEFAULT 0,
-            received_date TEXT,
-            bank_ref TEXT, note TEXT,
-            status TEXT DEFAULT '미적용',
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: prepayments 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1, 2])
     with col_form:
@@ -1123,24 +1066,7 @@ with tabs["prepay"]:
 
 # ══ AS 접수 ══════════════════════════════════════════
 with tabs["as_"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS as_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            as_number TEXT UNIQUE,
-            order_id INTEGER, customer_name TEXT,
-            item_name TEXT, delivery_number TEXT,
-            symptom TEXT, as_type TEXT DEFAULT '수리',
-            priority TEXT DEFAULT '일반',
-            assigned_to TEXT,
-            received_date TEXT, completed_date TEXT,
-            root_cause TEXT, action_taken TEXT,
-            qm_claim_linked INTEGER DEFAULT 0,
-            status TEXT DEFAULT '접수',
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: as_requests 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1, 2])
     with col_form:
@@ -1165,7 +1091,7 @@ with tabs["as_"]:
                     try:
                         conn=get_db()
                         asn=gen_number("AS")
-                        conn.execute("INSERT INTO as_requests(as_number,order_id,customer_name,item_name,delivery_number,symptom,as_type,priority,assigned_to,received_date,qm_claim_linked,status) VALUES(?,?,?,?,?,?,?,?,?,date('now'),?,?)",
+                        conn.execute("INSERT INTO as_requests(as_number,order_id,customer_name,item_name,delivery_number,symptom,as_type,priority,assigned_to,received_date,qm_claim_linked,status) VALUES(?,?,?,?,?,?,?,?,?,CURDATE(),?,?)",
                             (asn,as_d['id'] if as_d else None,cust_as,item_as,as_d['delivery_number'] if as_d else "",symptom,atype,pri,assigned,1 if link_qm else 0,"접수"))
                         if link_qm:
                             conn.execute("INSERT INTO quality_inspections(inspection_number,inspection_type,item_name,lot_size,sample_qty,result,note) VALUES(?,?,?,?,?,?,?)",
@@ -1200,25 +1126,15 @@ with tabs["as_"]:
                 c1,c2=st.columns(2); sel_asu=c1.selectbox("AS건",list(am.keys())); new_ast=c2.selectbox("상태",["접수","진행중","부품대기","완료","불가"])
                 action=st.text_input("처리내용")
                 if st.button("🔄 처리",use_container_width=True):
-                    conn=get_db(); conn.execute("UPDATE as_requests SET status=?,action_taken=?,completed_date=CASE ? WHEN '완료' THEN date('now') ELSE NULL END WHERE id=?",(new_ast,action,new_ast,am[sel_asu]))
+                    conn=get_db()
+                    completed_val = str(date.today()) if new_ast=='완료' else None
+                    conn.execute("UPDATE as_requests SET status=?,action_taken=?,completed_date=? WHERE id=?",(new_ast,action,completed_val,am[sel_asu]))
                     conn.commit(); conn.close(); st.rerun()
 
 
 # ══ 영업사원 관리 ══════════════════════════════════════════
 with tabs["sales_mgr"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS sales_reps (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rep_code TEXT UNIQUE,
-            rep_name TEXT NOT NULL,
-            region TEXT, team TEXT,
-            phone TEXT, email TEXT,
-            monthly_target REAL DEFAULT 0,
-            status TEXT DEFAULT '재직',
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: sales_reps 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1, 2])
     with col_form:
@@ -1234,7 +1150,7 @@ with tabs["sales_mgr"]:
                 else:
                     try:
                         conn=get_db()
-                        conn.execute("INSERT INTO sales_reps(rep_code,rep_name,region,team,phone,email,monthly_target,status) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(rep_code) DO UPDATE SET rep_name=excluded.rep_name,monthly_target=excluded.monthly_target",
+                        conn.execute("INSERT INTO sales_reps(rep_code,rep_name,region,team,phone,email,monthly_target,status) VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE rep_name=VALUES(rep_name),monthly_target=VALUES(monthly_target)",
                             (rc,rn,reg,team,phn,eml,tgt,rst))
                         conn.commit(); conn.close(); st.success("등록!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
@@ -1247,7 +1163,7 @@ with tabs["sales_mgr"]:
         st.subheader("SO에 영업사원 배정")
         conn=get_db()
         reps_active=[r[0] for r in conn.execute("SELECT rep_name FROM sales_reps WHERE status='재직'").fetchall()]
-        sos_norep=[r for r in conn.execute("SELECT id,order_number,customer_name,item_name FROM sales_orders WHERE (sales_rep IS NULL OR sales_rep='') AND status NOT IN ('취소') ORDER BY id DESC LIMIT 20").fetchall()]
+        sos_norep=[r for r in conn.execute("SELECT id,order_number,customer_name,item_name FROM sales_orders WHERE COALESCE(sales_rep,'') = '' AND status NOT IN ('취소') ORDER BY id DESC LIMIT 20").fetchall()]
         conn.close()
         if reps_active and sos_norep:
             so_norep_m={f"{r['order_number']}-{r['customer_name']}":r['id'] for r in sos_norep}
@@ -1268,7 +1184,7 @@ with tabs["bi_sales_rep"]:
                    ROUND(SUM(s.quantity*s.unit_price*(1-s.discount_rate/100)),0) AS 매출액,
                    ROUND(AVG(s.discount_rate),1) AS 평균할인율,
                    COUNT(CASE WHEN s.status='배송완료' THEN 1 END) AS 완료건수,
-                   r.monthly_target AS 월목표
+                   MAX(r.monthly_target) AS 월목표
             FROM sales_orders s
             LEFT JOIN sales_reps r ON s.sales_rep=r.rep_name
             WHERE s.sales_rep IS NOT NULL AND s.status!='취소'

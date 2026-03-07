@@ -10,50 +10,17 @@ def _ac(t,c,ct="TEXT"):
     try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
     except: pass
 
-def init_qm():
-    conn=get_db(); c=conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS inspection_plans (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT NOT NULL,
-        inspection_type TEXT DEFAULT '수입검사', aql_level TEXT DEFAULT 'II',
-        sample_method TEXT DEFAULT 'AQL', min_sample INTEGER DEFAULT 1,
-        spec_items TEXT, pass_criteria TEXT, valid_from TEXT, valid_to TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS capa_actions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, nc_id INTEGER,
-        capa_number TEXT UNIQUE NOT NULL, action_type TEXT DEFAULT '시정조치',
-        description TEXT, responsible TEXT, due_date TEXT,
-        completion_date TEXT, effectiveness TEXT,
-        status TEXT DEFAULT '진행중',
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS customer_complaints (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, complaint_number TEXT UNIQUE NOT NULL,
-        customer_name TEXT, item_name TEXT NOT NULL,
-        complaint_type TEXT, description TEXT,
-        severity TEXT DEFAULT '보통', quantity INTEGER DEFAULT 1,
-        received_date TEXT, due_date TEXT,
-        root_cause TEXT, countermeasure TEXT,
-        status TEXT DEFAULT '접수',
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS measuring_instruments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, instrument_code TEXT UNIQUE NOT NULL,
-        instrument_name TEXT NOT NULL, serial_number TEXT,
-        location TEXT, calibration_cycle INTEGER DEFAULT 12,
-        last_calibration TEXT, next_calibration TEXT,
-        status TEXT DEFAULT '정상',
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS inspection_results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, inspection_id INTEGER,
-        spec_item TEXT NOT NULL, spec_value TEXT, actual_value TEXT,
-        result TEXT DEFAULT '합격', note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    conn.commit(); conn.close()
-
-try: init_qm()
-except: pass
-_ac("quality_inspections","supplier_name"); _ac("quality_inspections","po_number")
-_ac("quality_inspections","lot_size","INTEGER DEFAULT 0")
-_ac("nonconformance","supplier_name"); _ac("nonconformance","po_number")
-_ac("nonconformance","preventive_action","TEXT"); _ac("nonconformance","closed_at","TEXT")
+# MySQL: db.py init_db()에서 모든 테이블 생성 — 중복 CREATE TABLE 불필요
+# quality_inspections 누락 콼럼 보정
+_ac("quality_inspections","supplier_name","VARCHAR(200)"); _ac("quality_inspections","po_number","VARCHAR(100)")
+_ac("quality_inspections","lot_size","INT DEFAULT 0")
+_ac("quality_inspections","lot_number","VARCHAR(100)")
+_ac("quality_inspections","pass_qty","INT DEFAULT 0")
+_ac("quality_inspections","fail_qty","INT DEFAULT 0")
+_ac("quality_inspections","inspector","VARCHAR(100)")
+# nonconformance 누락 콼럼 보정
+_ac("nonconformance","supplier_name","VARCHAR(200)"); _ac("nonconformance","po_number","VARCHAR(100)")
+_ac("nonconformance","preventive_action","TEXT"); _ac("nonconformance","closed_at","DATETIME")
 
 st.title("🔬 QM – Quality Management (품질관리)")
 inject_css()
@@ -166,7 +133,7 @@ with tabs["insp"]:
 # ══ 검사 성적서 COA ══════════════════════════════════════════
 with tabs["coa"]:
     st.subheader("📄 검사 성적서(COA) 조회")
-    conn=get_db(); lots=[r[0] for r in conn.execute("SELECT DISTINCT lot_number FROM quality_inspections WHERE lot_number IS NOT NULL AND lot_number!=''").fetchall()]; conn.close()
+    conn=get_db(); lots=[r[0] for r in conn.execute("SELECT DISTINCT lot_number FROM quality_inspections WHERE lot_number IS NOT NULL AND CHAR_LENGTH(lot_number)>0").fetchall()]; conn.close()
     if not lots: st.info("LOT 데이터 없음")
     else:
         sel_lot=st.selectbox("LOT 선택",lots)
@@ -314,7 +281,7 @@ with tabs["bi_claim"]:
             df_ct=pd.read_sql_query(f"SELECT complaint_type AS 유형,COUNT(*) AS 건수 FROM customer_complaints WHERE created_at>='{bi_from}' GROUP BY complaint_type ORDER BY 건수 DESC",conn)
             if not df_ct.empty: st.plotly_chart(px.pie(df_ct,names='유형',values='건수',title="클레임 유형",hole=0.4).update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
         with col_r:
-            df_ctr=pd.read_sql_query(f"SELECT substr(received_date,1,7) AS 월,COUNT(*) AS 건수 FROM customer_complaints WHERE created_at>='{bi_from}' GROUP BY substr(received_date,1,7) ORDER BY 월",conn)
+            df_ctr=pd.read_sql_query(f"SELECT DATE_FORMAT(received_date,'%%Y-%%m') AS 월,COUNT(*) AS 건수 FROM customer_complaints WHERE created_at>='{bi_from}' GROUP BY DATE_FORMAT(received_date,'%%Y-%%m') ORDER BY 월",conn)
             if not df_ctr.empty: st.plotly_chart(px.bar(df_ctr,x='월',y='건수',title="월별 클레임",color_discrete_sequence=['#ef4444']).update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
         conn.close()
 
@@ -333,7 +300,7 @@ with tabs["instr"]:
                 if not ic or not in2: st.error("필수 누락")
                 else:
                     try:
-                        conn=get_db(); conn.execute("INSERT INTO measuring_instruments(instrument_code,instrument_name,serial_number,location,calibration_cycle,last_calibration,next_calibration,status) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(instrument_code) DO UPDATE SET instrument_name=excluded.instrument_name,serial_number=excluded.serial_number,location=excluded.location,calibration_cycle=excluded.calibration_cycle,last_calibration=excluded.last_calibration,next_calibration=excluded.next_calibration,status=excluded.status",(ic,in2,sn,loc,cyc,str(lc),str(nc2),ist)); conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                        conn=get_db(); conn.execute("INSERT INTO measuring_instruments(instrument_code,instrument_name,serial_number,location,calibration_cycle,last_calibration,next_calibration,status) VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE instrument_name=VALUES(instrument_name),serial_number=VALUES(serial_number),location=VALUES(location),calibration_cycle=VALUES(calibration_cycle),last_calibration=VALUES(last_calibration),next_calibration=VALUES(next_calibration),status=VALUES(status)",(ic,in2,sn,loc,cyc,str(lc),str(nc2),ist)); conn.commit(); conn.close(); st.success("등록!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
     with col_list:
         st.subheader("계측기 목록")
@@ -350,7 +317,7 @@ with tabs["instr"]:
 # ══ 교정 일정 ══════════════════════════════════════════
 with tabs["calib"]:
     st.subheader("⏰ 교정 일정 현황")
-    conn=get_db(); df_cal=pd.read_sql_query("SELECT instrument_code AS 코드,instrument_name AS 계측기,location AS 위치,last_calibration AS 최근교정,next_calibration AS 다음교정,calibration_cycle AS 주기,CAST(julianday(next_calibration)-julianday('now') AS INTEGER) AS 잔여일,status AS 상태 FROM measuring_instruments ORDER BY next_calibration",conn); conn.close()
+    conn=get_db(); df_cal=pd.read_sql_query("SELECT instrument_code AS 코드,instrument_name AS 계측기,location AS 위치,last_calibration AS 추근교정,next_calibration AS 다음교정,calibration_cycle AS 주기,CAST(DATEDIFF(next_calibration,CURDATE()) AS SIGNED) AS 잔여일,status AS 상태 FROM measuring_instruments ORDER BY next_calibration",conn); conn.close()
     if df_cal.empty: st.info("없음")
     else:
         def cal_c(r):
@@ -375,7 +342,7 @@ with tabs["kpi"]:
         with col_l:
             if not df_qi2.empty:
                 tc2=df_qi2['inspection_type'].value_counts().reset_index(); tc2.columns=['유형','건수']
-                st.plotly_chart(px.bar(tc2,x='유형',y='건수',color='건수',title="검사유형별",color_continuous_scale='Blues').update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
+                st.plotly_chart(px.bar(tc2,x='유형',y='건수',color='건수',color_continuous_scale='Blues').update_layout(height=260,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
         with col_r:
             if not df_qi2.empty:
                 rc2=df_qi2['result'].value_counts().reset_index(); rc2.columns=['결과','건수']
@@ -388,7 +355,7 @@ with tabs["bi_trend"]:
     if not HAS_PL: st.warning("pip install plotly")
     else:
         conn=get_db()
-        df_tr=pd.read_sql_query(f"SELECT substr(inspected_at,1,7) AS 월,SUM(sample_qty) AS 샘플,SUM(fail_qty) AS 불합격,ROUND(SUM(fail_qty)*100.0/NULLIF(SUM(sample_qty),0),2) AS 불량률 FROM quality_inspections WHERE inspected_at>='{bi_from}' GROUP BY substr(inspected_at,1,7) ORDER BY 월",conn)
+        df_tr=pd.read_sql_query(f"SELECT DATE_FORMAT(inspected_at,'%%Y-%%m') AS 월,SUM(sample_qty) AS 샘플,SUM(fail_qty) AS 불합격,ROUND(SUM(fail_qty)*100.0/NULLIF(SUM(sample_qty),0),2) AS 불량률 FROM quality_inspections WHERE inspected_at>='{bi_from}' GROUP BY DATE_FORMAT(inspected_at,'%%Y-%%m') ORDER BY 월",conn)
         if not df_tr.empty:
             fig=make_subplots(specs=[[{"secondary_y":True}]])
             fig.add_trace(go.Bar(x=df_tr['월'],y=df_tr['샘플'],name='샘플수',marker_color='#93c5fd'),secondary_y=False)
@@ -402,7 +369,7 @@ with tabs["bi_sup"]:
     if not HAS_PL: st.warning("pip install plotly")
     else:
         conn=get_db()
-        df_sq=pd.read_sql_query(f"SELECT supplier_name AS 공급사,COUNT(*) AS 검사건수,SUM(fail_qty) AS 불합격,SUM(sample_qty) AS 샘플,ROUND(SUM(fail_qty)*100.0/NULLIF(SUM(sample_qty),0),2) AS 불량률 FROM quality_inspections WHERE supplier_name IS NOT NULL AND supplier_name!='' AND inspected_at>='{bi_from}' GROUP BY supplier_name ORDER BY 불량률 DESC",conn)
+        df_sq=pd.read_sql_query(f"SELECT supplier_name AS 공급사,COUNT(*) AS 검사건수,SUM(fail_qty) AS 불합격,SUM(sample_qty) AS 샘플,ROUND(SUM(fail_qty)*100.0/NULLIF(SUM(sample_qty),0),2) AS 불량률 FROM quality_inspections WHERE supplier_name IS NOT NULL AND CHAR_LENGTH(COALESCE(supplier_name,''))>0 AND inspected_at>='{bi_from}' GROUP BY supplier_name ORDER BY 불량률 DESC",conn)
         if df_sq.empty: st.plotly_chart(_ef("공급사 검사 데이터 없음"),use_container_width=True)
         else:
             st.plotly_chart(px.bar(df_sq,x='공급사',y='불량률',color='불량률',color_continuous_scale='RdYlGn_r',title="공급사별 불량률(%)").add_hline(y=5,line_dash="dash",line_color="red",annotation_text="기준 5%").update_layout(height=300,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
@@ -439,21 +406,7 @@ with tabs["spc"]:
 
 # ══ 8D 리포트 ══════════════════════════════════════════
 with tabs["d8"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS d8_reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            d8_number TEXT UNIQUE,
-            nc_id INTEGER, claim_id INTEGER,
-            title TEXT NOT NULL,
-            d1_team TEXT, d2_problem TEXT, d3_containment TEXT,
-            d4_root_cause TEXT, d5_corrective TEXT, d6_implementation TEXT,
-            d7_prevention TEXT, d8_closure TEXT,
-            status TEXT DEFAULT 'D1-팀구성',
-            owner TEXT, due_date TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: d8_reports 테이블은 db.py init_db()에서 이미 생성됨
 
     st.subheader("📋 8D 리포트 (8 Disciplines Problem Solving)")
     st.caption("D1 팀구성 → D2 문제기술 → D3 봉쇄조치 → D4 근본원인 → D5 시정조치 → D6 실행 → D7 재발방지 → D8 종결")
@@ -515,31 +468,7 @@ with tabs["d8"]:
 
 # ══ 공급사 품질 감사 ══════════════════════════════════════════
 with tabs["audit_plan"]:
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS supplier_audits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            audit_number TEXT UNIQUE,
-            supplier_name TEXT NOT NULL,
-            audit_type TEXT DEFAULT '정기감사',
-            planned_date TEXT, actual_date TEXT,
-            lead_auditor TEXT, team_members TEXT,
-            scope TEXT, checklist TEXT,
-            status TEXT DEFAULT '계획',
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.execute('''CREATE TABLE IF NOT EXISTS audit_findings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            audit_id INTEGER,
-            finding_type TEXT DEFAULT '관찰사항',
-            category TEXT, description TEXT,
-            evidence TEXT, requirement TEXT,
-            severity TEXT DEFAULT '경미',
-            corrective_action TEXT, due_date TEXT,
-            status TEXT DEFAULT '미조치',
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: supplier_audits, audit_findings 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1, 2])
     with col_form:
@@ -568,7 +497,7 @@ with tabs["audit_plan"]:
                    audit_type AS 유형, planned_date AS 계획일,
                    actual_date AS 실시일, lead_auditor AS 주감사원,
                    status AS 상태,
-                   CAST(julianday(planned_date)-julianday('now') AS INTEGER) AS D_DAY
+                   CAST(DATEDIFF(planned_date, CURDATE()) AS SIGNED) AS D_DAY
             FROM supplier_audits ORDER BY planned_date""", conn); conn.close()
         if df_aud.empty: st.info("없음")
         else:
@@ -624,7 +553,8 @@ with tabs["audit_result"]:
                a.status AS 상태
         FROM supplier_audits a
         LEFT JOIN audit_findings f ON a.id=f.audit_id
-        GROUP BY a.id ORDER BY a.actual_date DESC""", conn); conn.close()
+        GROUP BY a.id,a.audit_number,a.supplier_name,a.audit_type,a.actual_date,a.status
+        ORDER BY a.actual_date DESC""", conn); conn.close()
     if df_ar.empty: st.info("없음")
     else:
         c1,c2,c3=st.columns(3)

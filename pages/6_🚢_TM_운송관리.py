@@ -276,11 +276,11 @@ with tabs[2]:
                         conn.execute("""INSERT INTO hs_codes
                             (hs_code,description,import_duty_rate,vat_rate,unit,special_notes)
                             VALUES(?,?,?,?,?,?)
-                            ON CONFLICT(hs_code) DO UPDATE SET
-                            description=excluded.description,
-                            import_duty_rate=excluded.import_duty_rate,
-                            vat_rate=excluded.vat_rate,
-                            unit=excluded.unit, special_notes=excluded.special_notes""",
+                            ON DUPLICATE KEY UPDATE
+                            description=VALUES(description),
+                            import_duty_rate=VALUES(import_duty_rate),
+                            vat_rate=VALUES(vat_rate),
+                            unit=VALUES(unit), special_notes=VALUES(special_notes)""",
                             (hs_code, desc, duty_rate, vat_rate, unit, notes))
                         conn.commit(); conn.close()
                         st.success("HS Code 등록!"); st.rerun()
@@ -948,7 +948,7 @@ with tabs[9]:
                             (check_number,item_name,hs_code,destination_country,end_user,
                              check_type,result,restriction_level,checker,
                              checked_at,note)
-                            VALUES(?,?,?,?,?,?,?,?,?,datetime('now','localtime'),?)""",
+                            VALUES(?,?,?,?,?,?,?,?,?,NOW(),?)""",
                             (cnum,item_st,hs_code_val,dest_st,end_user,
                              check_type,final_result,final_restrict,checker,note_st))
                         conn.commit(); conn.close()
@@ -1073,19 +1073,7 @@ with tabs["co"]:
     def _ac_tm(t,c,ct="TEXT"):
         try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
         except: pass
-    try:
-        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS origin_certificates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, co_number TEXT UNIQUE NOT NULL,
-            export_id INTEGER, exporter_name TEXT, importer_name TEXT,
-            hs_code TEXT, item_name TEXT, quantity REAL, unit TEXT DEFAULT 'EA',
-            fob_value REAL DEFAULT 0, currency TEXT DEFAULT 'USD',
-            origin_country TEXT DEFAULT 'KR', dest_country TEXT,
-            co_type TEXT DEFAULT 'FTA', fta_agreement TEXT,
-            issue_date TEXT, valid_to TEXT,
-            status TEXT DEFAULT '발급신청',
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: origin_certificates 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1, 2])
     with col_form:
@@ -1123,17 +1111,7 @@ with tabs["co"]:
 
 # ── 운임 계산 ─────────────────────────────────────────
 with tabs["freight"]:
-    try:
-        conn=get_db(); conn.execute('''CREATE TABLE IF NOT EXISTS freight_quotes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, fq_number TEXT UNIQUE NOT NULL,
-            transport_mode TEXT, origin TEXT, destination TEXT,
-            weight_kg REAL DEFAULT 0, cbm REAL DEFAULT 0,
-            carrier TEXT, freight_cost REAL DEFAULT 0, currency TEXT DEFAULT 'USD',
-            surcharges TEXT, total_cost_krw REAL DEFAULT 0,
-            valid_until TEXT, note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: freight_quotes 테이블은 db.py init_db()에서 이미 생성됨
 
     st.subheader("💰 운임 계산기")
     col_l, col_r = st.columns([1,1])
@@ -1182,7 +1160,7 @@ with tabs["bi_fx"]:
         # 환율 데이터
         df_fx=pd.read_sql_query("SELECT currency,rate_to_krw AS rate,rate_date AS created_at FROM exchange_rates ORDER BY rate_date DESC LIMIT 200",conn)
         if not df_fx.empty:
-            df_fx['날짜']=df_fx['created_at'].str[:10]
+            df_fx['날짜']=df_fx['created_at'].astype(str).str[:10]
             c1,c2,c3=st.columns(3)
             for i,(cur2,label) in enumerate(zip(['USD','EUR','CNY'],['달러','유로','위안'])):
                 cur_df=df_fx[df_fx['currency']==cur2]
@@ -1252,8 +1230,8 @@ with tabs["bi_country"]:
 
         # 월별 수출입 추이
         st.subheader("📈 월별 수출입 추이")
-        df_exp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수출건수,ROUND(SUM(invoice_value),0) AS FOB FROM export_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
-        df_imp_m=pd.read_sql_query("SELECT substr(created_at,1,7) AS 월,COUNT(*) AS 수입건수,ROUND(SUM(invoice_value),0) AS CIF FROM import_declarations GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        df_exp_m=pd.read_sql_query("SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS 월,COUNT(*) AS 수출건수,ROUND(SUM(invoice_value),0) AS FOB FROM export_declarations GROUP BY DATE_FORMAT(created_at,'%%Y-%%m') ORDER BY 월",conn)
+        df_imp_m=pd.read_sql_query("SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS 월,COUNT(*) AS 수입건수,ROUND(SUM(invoice_value),0) AS CIF FROM import_declarations GROUP BY DATE_FORMAT(created_at,'%%Y-%%m') ORDER BY 월",conn)
         if not df_exp_m.empty or not df_imp_m.empty:
             col_l2,col_r2=st.columns(2)
             with col_l2:
@@ -1283,10 +1261,10 @@ with tabs["fwd"]:
                     try:
                         conn=get_db()
                         conn.execute("""INSERT INTO forwarders(forwarder_code,forwarder_name,contact,phone,email,country,region,transport_modes,rating,status,note)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(forwarder_code) DO UPDATE SET
-                            forwarder_name=excluded.forwarder_name,contact=excluded.contact,phone=excluded.phone,
-                            email=excluded.email,country=excluded.country,region=excluded.region,
-                            transport_modes=excluded.transport_modes,rating=excluded.rating,status=excluded.status""",(
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
+                            forwarder_name=VALUES(forwarder_name),contact=VALUES(contact),phone=VALUES(phone),
+                            email=VALUES(email),country=VALUES(country),region=VALUES(region),
+                            transport_modes=VALUES(transport_modes),rating=VALUES(rating),status=VALUES(status)""",(
                             fc,fn,ctt,phn,eml,cntry,rgn,",".join(modes),rat,fst,fnote))
                         conn.commit(); conn.close(); st.success("등록!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
@@ -1386,7 +1364,7 @@ with tabs["epl"]:
 | **품목** | {r['품목']} | **선박** | {r['선박'] or '-'} |
 | **박스수** | {r['박스수']} boxes | **총수량** | {r['총수량']} EA |
 | **총중량** | {r['총중량']} kg | **순중량** | {r['순중량']} kg |
-| **선적항** | {r['선적항'] or '-'} | **등록일** | {r['등록일'][:10] if r['등록일'] else '-'} |
+| **선적항** | {r['선적항'] or '-'} | **등록일** | {str(r['등록일'])[:10] if r['등록일'] else '-'} |
 """)
 
 
@@ -1477,9 +1455,9 @@ with tabs["ctn"]:
                         conn.execute("""INSERT INTO containers
                             (container_number,container_type,bl_id,forwarder_id,seal_number,
                              origin_port,dest_port,etd,eta,free_days,demurrage_rate,return_deadline,status)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(container_number) DO UPDATE SET
-                            container_type=excluded.container_type,status=excluded.status,
-                            return_deadline=excluded.return_deadline""",(
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
+                            container_type=VALUES(container_type),status=VALUES(status),
+                            return_deadline=VALUES(return_deadline)""",(
                             cnum,ctype,bl_ctn_map.get(bl_sel_c),fwd_ctn_map.get(fwd_sel_c),seal,
                             orig_p,dest_p,str(etd_c),str(eta_c),free_d,dem_r,str(ret_dl),cst))
                         conn.commit(); conn.close(); st.success("등록!"); st.rerun()
@@ -1493,7 +1471,7 @@ with tabs["ctn"]:
                    free_days AS FreeDays,
                    demurrage_rate AS 데머리지율,
                    return_deadline AS 반납기한,
-                   CAST(julianday(return_deadline)-julianday('now') AS INTEGER) AS 반납잔여일,
+                   CAST(DATEDIFF(return_deadline, CURDATE()) AS SIGNED) AS 반납잔여일,
                    status AS 상태
             FROM containers ORDER BY eta""", conn); conn.close()
         if df_ctn.empty: st.info("없음")

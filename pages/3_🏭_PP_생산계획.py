@@ -10,38 +10,26 @@ def _ac(t,c,ct="TEXT"):
     try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
     except: pass
 
-def init_pp():
-    conn=get_db(); c=conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS work_orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, wo_number TEXT UNIQUE NOT NULL,
-        plan_id INTEGER, product_name TEXT NOT NULL, work_center TEXT,
-        planned_qty INTEGER NOT NULL, actual_qty INTEGER DEFAULT 0,
-        defect_qty INTEGER DEFAULT 0, start_date TEXT, end_date TEXT,
-        actual_start TEXT, actual_end TEXT,
-        worker TEXT, machine TEXT,
-        status TEXT DEFAULT '대기', note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS routings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, product_name TEXT NOT NULL,
-        operation_seq INTEGER NOT NULL, operation_name TEXT NOT NULL,
-        work_center TEXT, standard_time REAL DEFAULT 0,
-        machine TEXT, note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    c.execute('''CREATE TABLE IF NOT EXISTS work_centers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, wc_code TEXT UNIQUE NOT NULL,
-        wc_name TEXT NOT NULL, capacity_per_day REAL DEFAULT 8.0,
-        machine_count INTEGER DEFAULT 1,
-        status TEXT DEFAULT '가동', note TEXT,
-        created_at TEXT DEFAULT (datetime('now','localtime')))''')
-    conn.commit(); conn.close()
-
-try: init_pp()
-except: pass
-_ac("production_plans","actual_qty","INTEGER DEFAULT 0")
-_ac("production_plans","defect_qty","INTEGER DEFAULT 0")
-_ac("production_plans","completion_rate","REAL DEFAULT 0")
-_ac("bom","bom_level","INTEGER DEFAULT 1")
-_ac("bom","valid_from","TEXT"); _ac("bom","valid_to","TEXT")
+# MySQL: db.py init_db()에서 모든 테이블 생성 — 중복 CREATE TABLE 불필요
+# production_plans 누락 컬럼 보정
+_ac("production_plans","actual_qty","INT DEFAULT 0")
+_ac("production_plans","defect_qty","INT DEFAULT 0")
+_ac("production_plans","completion_rate","DECIMAL(5,2) DEFAULT 0")
+# bom 누락 컬럼 보정
+_ac("bom","bom_level","INT DEFAULT 1")
+_ac("bom","valid_from","DATE"); _ac("bom","valid_to","DATE")
+# work_orders 누락 컬럼 보정 (기존 테이블에서 컬럼이 없을 경우 대비)
+_ac("work_orders","plan_id","INT")
+_ac("work_orders","work_center","VARCHAR(100)")
+_ac("work_orders","actual_qty","INT DEFAULT 0")
+_ac("work_orders","defect_qty","INT DEFAULT 0")
+_ac("work_orders","start_date","DATE")
+_ac("work_orders","end_date","DATE")
+_ac("work_orders","actual_start","DATE")
+_ac("work_orders","actual_end","DATE")
+_ac("work_orders","worker","VARCHAR(100)")
+_ac("work_orders","machine","VARCHAR(100)")
+_ac("work_orders","note","TEXT")
 
 st.title("🏭 PP – Production Planning (생산계획/MRP)")
 inject_css()
@@ -135,7 +123,7 @@ with tabs["wc"]:
                 if not wcc or not wcn: st.error("필수 누락")
                 else:
                     try:
-                        conn=get_db(); conn.execute("INSERT INTO work_centers(wc_code,wc_name,capacity_per_day,machine_count,status,note) VALUES(?,?,?,?,?,?) ON CONFLICT(wc_code) DO UPDATE SET wc_name=excluded.wc_name,capacity_per_day=excluded.capacity_per_day,machine_count=excluded.machine_count,status=excluded.status",(wcc,wcn,cap,mc,wcs,wcnote)); conn.commit(); conn.close(); st.success("등록!"); st.rerun()
+                        conn=get_db(); conn.execute("INSERT INTO work_centers(wc_code,wc_name,capacity_per_day,machine_count,status,note) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE wc_name=VALUES(wc_name),capacity_per_day=VALUES(capacity_per_day),machine_count=VALUES(machine_count),status=VALUES(status)",(wcc,wcn,cap,mc,wcs,wcnote)); conn.commit(); conn.close(); st.success("등록!"); st.rerun()
                     except Exception as e: st.error(f"오류:{e}")
     with col_list:
         st.subheader("작업장 목록")
@@ -225,7 +213,7 @@ with tabs["result"]:
 # ══ 진행 현황 ══════════════════════════════════════════
 with tabs["progress"]:
     st.subheader("📊 생산 진행 현황")
-    conn=get_db(); df_pg=pd.read_sql_query("SELECT p.plan_number AS 계획번호,p.product_name AS 품목,p.planned_qty AS 계획수량,COALESCE(p.actual_qty,0) AS 실적수량,COALESCE(p.defect_qty,0) AS 불량수량,p.start_date AS 시작일,p.end_date AS 완료예정,p.status AS 상태,COUNT(w.id) AS WO수 FROM production_plans p LEFT JOIN work_orders w ON p.id=w.plan_id GROUP BY p.id ORDER BY p.id DESC",conn); conn.close()
+    conn=get_db(); df_pg=pd.read_sql_query("SELECT p.plan_number AS 계획번호,p.product_name AS 품목,p.planned_qty AS 계획수량,COALESCE(p.actual_qty,0) AS 실적수량,COALESCE(p.defect_qty,0) AS 불량수량,p.start_date AS 시작일,p.end_date AS 완료예정,p.status AS 상태,COUNT(w.id) AS WO수 FROM production_plans p LEFT JOIN work_orders w ON p.id=w.plan_id GROUP BY p.id,p.plan_number,p.product_name,p.planned_qty,p.actual_qty,p.defect_qty,p.start_date,p.end_date,p.status ORDER BY p.id DESC",conn); conn.close()
     if df_pg.empty: st.info("없음")
     else:
         # 진행율 컬럼
@@ -291,7 +279,7 @@ with tabs["bi_prod"]:
         ach=conn.execute(f"SELECT ROUND(AVG((actual_qty*1.0/NULLIF(planned_qty,0))*100),1) FROM production_plans WHERE status='완료' AND created_at>='{bi_from}'").fetchone()[0] or 0
         df_rate=conn.execute(f"SELECT ROUND(SUM(defect_qty)*100.0/NULLIF(SUM(actual_qty),0),2) FROM work_orders WHERE status='완료' AND created_at>='{bi_from}'").fetchone()[0] or 0
         c1,c2,c3,c4=st.columns(4); c1.metric("생산계획수",f"{tc}건"); c2.metric("완료건수",f"{done_c}건"); c3.metric("평균달성률",f"{ach}%"); c4.metric("불량률",f"{df_rate}%",delta_color="inverse")
-        df_trend=pd.read_sql_query(f"SELECT substr(created_at,1,7) AS 월,SUM(planned_qty) AS 계획수량,SUM(actual_qty) AS 실적수량 FROM production_plans WHERE created_at>='{bi_from}' GROUP BY substr(created_at,1,7) ORDER BY 월",conn)
+        df_trend=pd.read_sql_query(f"SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS 월,SUM(planned_qty) AS 계획수량,SUM(actual_qty) AS 실적수량 FROM production_plans WHERE created_at>='{bi_from}' GROUP BY DATE_FORMAT(created_at,'%%Y-%%m') ORDER BY 월",conn)
         if not df_trend.empty:
             fig=go.Figure()
             fig.add_trace(go.Bar(x=df_trend['월'],y=df_trend['계획수량'],name='계획',marker_color='#93c5fd'))
@@ -602,23 +590,7 @@ with tabs["subcon"]:
     def _ac_pp(t,c,ct="TEXT"):
         try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
         except: pass
-    try:
-        conn=get_db()
-        conn.execute('''CREATE TABLE IF NOT EXISTS subcon_orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sc_number TEXT UNIQUE NOT NULL,
-            supplier TEXT NOT NULL,
-            product_name TEXT NOT NULL,
-            quantity INTEGER NOT NULL,
-            unit_cost REAL DEFAULT 0,
-            send_date TEXT, due_date TEXT, receive_date TEXT,
-            send_qty INTEGER DEFAULT 0, receive_qty INTEGER DEFAULT 0,
-            defect_qty INTEGER DEFAULT 0,
-            status TEXT DEFAULT '발주',
-            note TEXT,
-            created_at TEXT DEFAULT (datetime('now','localtime')))''')
-        conn.commit(); conn.close()
-    except: pass
+    # MySQL: subcon_orders 테이블은 db.py init_db()에서 이미 생성됨
 
     col_form, col_list = st.columns([1,2])
     with col_form:
@@ -659,7 +631,7 @@ with tabs["subcon"]:
                     conn=get_db()
                     new_recv=sc_d['receive_qty']+recv_qty
                     new_st="입고완료" if new_recv>=sc_d['quantity'] else "일부입고"
-                    conn.execute("UPDATE subcon_orders SET receive_qty=?,defect_qty=defect_qty+?,receive_date=date('now'),status=? WHERE id=?",
+                    conn.execute("UPDATE subcon_orders SET receive_qty=?,defect_qty=defect_qty+?,receive_date=CURDATE(),status=? WHERE id=?",
                         (new_recv,defect_sc,new_st,sc_d['id']))
                     # 재고 반영
                     inv=conn.execute("SELECT id FROM inventory WHERE item_name=?",(sc_d['product_name'],)).fetchone()
@@ -677,7 +649,7 @@ with tabs["subcon"]:
                    quantity-receive_qty AS 잔량,
                    unit_cost AS 단가, quantity*unit_cost AS 발주금액,
                    send_date AS 발송일, due_date AS 납기,
-                   CAST(julianday(due_date)-julianday('now') AS INTEGER) AS 납기잔여,
+                   CAST(DATEDIFF(due_date, CURDATE()) AS SIGNED) AS 납기잔여,
                    defect_qty AS 불량수량, status AS 상태
             FROM subcon_orders ORDER BY due_date""", conn); conn.close()
         if df_sc.empty: st.info("외주 없음")
@@ -699,21 +671,7 @@ with tabs["sop"]:
         def _ac_sop(t,c,ct="TEXT"):
             try: conn=get_db(); conn.execute(f"ALTER TABLE {t} ADD COLUMN {c} {ct}"); conn.commit(); conn.close()
             except: pass
-        try:
-            conn=get_db()
-            conn.execute('''CREATE TABLE IF NOT EXISTS sop_plans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                year INTEGER, month INTEGER,
-                product_name TEXT,
-                sales_forecast INTEGER DEFAULT 0,
-                production_plan INTEGER DEFAULT 0,
-                inventory_target INTEGER DEFAULT 0,
-                opening_stock INTEGER DEFAULT 0,
-                closing_stock INTEGER DEFAULT 0,
-                note TEXT,
-                created_at TEXT DEFAULT (datetime('now','localtime')))''')
-            conn.commit(); conn.close()
-        except: pass
+        # MySQL: sop_plans 테이블은 db.py init_db()에서 이미 생성됨
 
         st.subheader("🗓️ S&OP — 판매·운영 계획")
         st.caption("수요예측(판매) ↔ 생산계획 ↔ 재고 균형을 월별로 조정")
@@ -737,7 +695,7 @@ with tabs["sop"]:
                 if st.form_submit_button("✅ 저장",use_container_width=True):
                     try:
                         conn=get_db()
-                        conn.execute("""INSERT OR REPLACE INTO sop_plans(year,month,product_name,sales_forecast,production_plan,inventory_target,opening_stock,closing_stock,note)
+                        conn.execute("""REPLACE INTO sop_plans(year,month,product_name,sales_forecast,production_plan,inventory_target,opening_stock,closing_stock,note)
                             VALUES(?,?,?,?,?,?,?,?,?)""",
                             (yr_sop,mo_sop,prod_sop,fc_sop,pp_sop,inv_tgt,open_st,close_st,note_sop))
                         conn.commit(); conn.close(); st.success("저장!"); st.rerun()
