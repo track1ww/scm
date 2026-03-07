@@ -152,7 +152,7 @@ python fix_db.py
 
 ## 🎨 디자인 시스템
 
-`utils/design.py`의 Notion 스타일 테마를 전 페이지에 일관 적용합니다.
+`utils/design.py` 일관 적용합니다.
 
 ```python
 from utils.design import inject_css, apply_plotly_theme, page_header, section_title, kpi_card
