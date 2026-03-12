@@ -267,9 +267,9 @@ with tabs[0]:
                                 _cv = _edit_row_suppliers[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_suppliers[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_suppliers")
+                                    _new_vals_suppliers[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_suppliers}_{_fc}_suppliers")
                                 else:
-                                    _new_vals_suppliers[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_suppliers")
+                                    _new_vals_suppliers[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_suppliers}_{_fc}_suppliers")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_suppliers"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_suppliers])
@@ -365,6 +365,176 @@ with tabs[1]:
                 df = df[df['자재코드'].str.contains(search_m, na=False) | df['자재명'].str.contains(search_m, na=False)]
             st.dataframe(df, use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (inventory) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_inventory = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM inventory ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_inventory[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_inventory:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_inventory = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_inventory.keys()),
+                        key="_rbsel_inventory", label_visibility="collapsed"
+                    )
+                    _rb_id_inventory = _row_opts_inventory[_rb_sel_inventory]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_inventory"):
+                        st.session_state[f"_edit_inventory"] = _rb_id_inventory
+                        st.session_state[f"_del_inventory"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_inventory"):
+                        st.session_state[f"_del_inventory"]  = _rb_id_inventory
+                        st.session_state[f"_edit_inventory"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_inventory"):
+                    _del_id_inventory = st.session_state[f"_del_inventory"]
+                    st.warning(f"⚠️ ID **{_del_id_inventory}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_inventory"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM inventory WHERE id = ?", (_del_id_inventory,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_inventory"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_inventory"):
+                        st.session_state[f"_del_inventory"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_inventory"):
+                    _edit_id_inventory = st.session_state[f"_edit_inventory"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_inventory = dict(_cx_e.execute(
+                            "SELECT * FROM inventory WHERE id=?", (_edit_id_inventory,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_inventory = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_inventory}", expanded=True):
+                        if not _edit_row_inventory:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_inventory = [c for c in _edit_row_inventory if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_inventory)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_inventory = {}
+                            for _i, _fc in enumerate(_edit_fields_inventory):
+                                _cv = _edit_row_inventory[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_inventory[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_inventory}_{_fc}_inventory")
+                                else:
+                                    _new_vals_inventory[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_inventory}_{_fc}_inventory")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_inventory"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_inventory])
+                                _set_params = list(_new_vals_inventory.values()) + [_edit_id_inventory]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE inventory SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_inventory"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_inventory"):
+                                st.session_state[f"_edit_inventory"] = None; st.rerun()
+
+
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (자재) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_materials = {}
@@ -434,9 +604,9 @@ with tabs[1]:
                                 _cv = _edit_row_materials[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_materials[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_materials")
+                                    _new_vals_materials[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_materials}_{_fc}_materials")
                                 else:
-                                    _new_vals_materials[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_materials")
+                                    _new_vals_materials[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_materials}_{_fc}_materials")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_materials"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_materials])
@@ -532,6 +702,91 @@ with tabs[2]:
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (대체자재) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_alternative_materials = {}
@@ -601,9 +856,9 @@ with tabs[2]:
                                 _cv = _edit_row_alternative_materials[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_alternative_materials[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_alternative_materials")
+                                    _new_vals_alternative_materials[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_alternative_materials}_{_fc}_alternative_materials")
                                 else:
-                                    _new_vals_alternative_materials[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_alternative_materials")
+                                    _new_vals_alternative_materials[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_alternative_materials}_{_fc}_alternative_materials")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_alternative_materials"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_alternative_materials])
@@ -719,6 +974,91 @@ with tabs[3]:
                 st.warning(f"⚠️ 30일 내 만료 PIR: {len(exp_soon_pir)}건")
             st.dataframe(df, use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (PIR) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_purchase_info_records = {}
@@ -788,9 +1128,9 @@ with tabs[3]:
                                 _cv = _edit_row_purchase_info_records[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_purchase_info_records[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_purchase_info_records")
+                                    _new_vals_purchase_info_records[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_purchase_info_records}_{_fc}_purchase_info_records")
                                 else:
-                                    _new_vals_purchase_info_records[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_purchase_info_records")
+                                    _new_vals_purchase_info_records[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_purchase_info_records}_{_fc}_purchase_info_records")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_info_records"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_info_records])
@@ -885,89 +1225,174 @@ with tabs[4]:
             with tab_pr1:
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
-                # ── 행 수정/삭제 버튼 (PR) ──────────────────────────
-                if not df.empty if hasattr(df, 'empty') else df is not None:
-                    _row_opts_purchase_requests = {}
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
                     try:
-                        _cx_opt = get_db()
-                        _opt_rs = [dict(r) for r in _cx_opt.execute(
-                            "SELECT id, 품목명 FROM purchase_requests ORDER BY id DESC LIMIT 300"
-                        ).fetchall()]
-                        _cx_opt.close()
-                        for _r in _opt_rs:
-                            _k = f"{_r['id']} | {_r.get('품목명','')}"
-                            _row_opts_purchase_requests[_k] = _r['id']
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
                     except Exception:
-                        pass
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
 
-                    if _row_opts_purchase_requests:
-                        _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
-                        _rb_sel_purchase_requests = _rb_sel_col.selectbox(
-                            "행 선택", list(_row_opts_purchase_requests.keys()),
-                            key="_rbsel_purchase_requests", label_visibility="collapsed"
-                        )
-                        _rb_id_purchase_requests = _row_opts_purchase_requests[_rb_sel_purchase_requests]
 
-                        if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_purchase_requests"):
-                            st.session_state[f"_edit_purchase_requests"] = _rb_id_purchase_requests
-                            st.session_state[f"_del_purchase_requests"]  = None
+    # ── 행 수정/삭제 버튼 (PR) ──────────────────────────
+    if not df.empty if hasattr(df, 'empty') else df is not None:
+        _row_opts_purchase_requests = {}
+        try:
+            _cx_opt = get_db()
+            _opt_rs = [dict(r) for r in _cx_opt.execute(
+                "SELECT id, 품목명 FROM purchase_requests ORDER BY id DESC LIMIT 300"
+            ).fetchall()]
+            _cx_opt.close()
+            for _r in _opt_rs:
+                _k = f"{_r['id']} | {_r.get('품목명','')}"
+                _row_opts_purchase_requests[_k] = _r['id']
+        except Exception:
+            pass
 
-                        if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_purchase_requests"):
-                            st.session_state[f"_del_purchase_requests"]  = _rb_id_purchase_requests
-                            st.session_state[f"_edit_purchase_requests"] = None
+        if _row_opts_purchase_requests:
+            _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+            _rb_sel_purchase_requests = _rb_sel_col.selectbox(
+                "행 선택", list(_row_opts_purchase_requests.keys()),
+                key="_rbsel_purchase_requests", label_visibility="collapsed"
+            )
+            _rb_id_purchase_requests = _row_opts_purchase_requests[_rb_sel_purchase_requests]
 
-                    # ── 삭제 확인 ──────────────────────────────────────────
-                    if st.session_state.get(f"_del_purchase_requests"):
-                        _del_id_purchase_requests = st.session_state[f"_del_purchase_requests"]
-                        st.warning(f"⚠️ ID **{_del_id_purchase_requests}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
-                        _dc1, _dc2 = st.columns(2)
-                        if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_purchase_requests"):
-                            _cx_d = get_db()
-                            _cx_d.execute("DELETE FROM purchase_requests WHERE id = ?", (_del_id_purchase_requests,))
-                            _cx_d.commit(); _cx_d.close()
-                            st.session_state[f"_del_purchase_requests"] = None
-                            st.success("✅ 삭제 완료!"); st.rerun()
-                        if _dc2.button("취소", use_container_width=True, key="_delcancel_purchase_requests"):
-                            st.session_state[f"_del_purchase_requests"] = None; st.rerun()
+            if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_purchase_requests"):
+                st.session_state[f"_edit_purchase_requests"] = _rb_id_purchase_requests
+                st.session_state[f"_del_purchase_requests"]  = None
 
-                    # ── 수정 인라인 폼 ─────────────────────────────────────
-                    if st.session_state.get(f"_edit_purchase_requests"):
-                        _edit_id_purchase_requests = st.session_state[f"_edit_purchase_requests"]
-                        try:
-                            _cx_e = get_db()
-                            _edit_row_purchase_requests = dict(_cx_e.execute(
-                                "SELECT * FROM purchase_requests WHERE id=?", (_edit_id_purchase_requests,)
-                            ).fetchone() or {})
-                            _cx_e.close()
-                        except Exception:
-                            _edit_row_purchase_requests = {}
-                        with st.expander(f"✏️ PR 수정 — ID {_edit_id_purchase_requests}", expanded=True):
-                            if not _edit_row_purchase_requests:
-                                st.warning("데이터를 불러올 수 없습니다.")
-                            else:
-                                _skip_cols = {'id','created_at','updated_at'}
-                                _edit_fields_purchase_requests = [c for c in _edit_row_purchase_requests if c not in _skip_cols]
-                                _ncols = min(3, max(1, len(_edit_fields_purchase_requests)))
-                                _ecols = st.columns(_ncols)
-                                _new_vals_purchase_requests = {}
-                                for _i, _fc in enumerate(_edit_fields_purchase_requests):
-                                    _cv = _edit_row_purchase_requests[_fc]
-                                    _ec = _ecols[_i % _ncols]
-                                    if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                        _new_vals_purchase_requests[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_purchase_requests")
-                                    else:
-                                        _new_vals_purchase_requests[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_purchase_requests")
-                                _s1, _s2 = st.columns(2)
-                                if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_requests"):
-                                    _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_requests])
-                                    _set_params = list(_new_vals_purchase_requests.values()) + [_edit_id_purchase_requests]
-                                    _cx_s = get_db()
-                                    _cx_s.execute(f"UPDATE purchase_requests SET {_set_sql} WHERE id=?", _set_params)
-                                    _cx_s.commit(); _cx_s.close()
-                                    st.session_state[f"_edit_purchase_requests"] = None
-                                    st.success("✅ 수정 저장 완료!"); st.rerun()
-                                if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_purchase_requests"):
-                                    st.session_state[f"_edit_purchase_requests"] = None; st.rerun()
+            if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_purchase_requests"):
+                st.session_state[f"_del_purchase_requests"]  = _rb_id_purchase_requests
+                st.session_state[f"_edit_purchase_requests"] = None
+
+        # ── 삭제 확인 ──────────────────────────────────────────
+        if st.session_state.get(f"_del_purchase_requests"):
+            _del_id_purchase_requests = st.session_state[f"_del_purchase_requests"]
+            st.warning(f"⚠️ ID **{_del_id_purchase_requests}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+            _dc1, _dc2 = st.columns(2)
+            if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_purchase_requests"):
+                _cx_d = get_db()
+                _cx_d.execute("DELETE FROM purchase_requests WHERE id = ?", (_del_id_purchase_requests,))
+                _cx_d.commit(); _cx_d.close()
+                st.session_state[f"_del_purchase_requests"] = None
+                st.success("✅ 삭제 완료!"); st.rerun()
+            if _dc2.button("취소", use_container_width=True, key="_delcancel_purchase_requests"):
+                st.session_state[f"_del_purchase_requests"] = None; st.rerun()
+
+        # ── 수정 인라인 폼 ─────────────────────────────────────
+        if st.session_state.get(f"_edit_purchase_requests"):
+            _edit_id_purchase_requests = st.session_state[f"_edit_purchase_requests"]
+            try:
+                _cx_e = get_db()
+                _edit_row_purchase_requests = dict(_cx_e.execute(
+                    "SELECT * FROM purchase_requests WHERE id=?", (_edit_id_purchase_requests,)
+                ).fetchone() or {})
+                _cx_e.close()
+            except Exception:
+                _edit_row_purchase_requests = {}
+            with st.expander(f"✏️ PR 수정 — ID {_edit_id_purchase_requests}", expanded=True):
+                if not _edit_row_purchase_requests:
+                    st.warning("데이터를 불러올 수 없습니다.")
+                else:
+                    _skip_cols = {'id','created_at','updated_at'}
+                    _edit_fields_purchase_requests = [c for c in _edit_row_purchase_requests if c not in _skip_cols]
+                    _ncols = min(3, max(1, len(_edit_fields_purchase_requests)))
+                    _ecols = st.columns(_ncols)
+                    _new_vals_purchase_requests = {}
+                    for _i, _fc in enumerate(_edit_fields_purchase_requests):
+                        _cv = _edit_row_purchase_requests[_fc]
+                        _ec = _ecols[_i % _ncols]
+                        if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                            _new_vals_purchase_requests[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_purchase_requests}_{_fc}_purchase_requests")
+                        else:
+                            _new_vals_purchase_requests[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_purchase_requests}_{_fc}_purchase_requests")
+                    _s1, _s2 = st.columns(2)
+                    if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_requests"):
+                        _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_requests])
+                        _set_params = list(_new_vals_purchase_requests.values()) + [_edit_id_purchase_requests]
+                        _cx_s = get_db()
+                        _cx_s.execute(f"UPDATE purchase_requests SET {_set_sql} WHERE id=?", _set_params)
+                        _cx_s.commit(); _cx_s.close()
+                        st.session_state[f"_edit_purchase_requests"] = None
+                        st.success("✅ 수정 저장 완료!"); st.rerun()
+                    if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_purchase_requests"):
+                        st.session_state[f"_edit_purchase_requests"] = None; st.rerun()
 
             with tab_pr2:
                 st.dataframe(df[df['상태']=='승인대기'], use_container_width=True, hide_index=True)
@@ -1140,9 +1565,9 @@ with tabs[5]:
                                 _cv = _edit_row_purchase_approvals[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_purchase_approvals[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_purchase_approvals")
+                                    _new_vals_purchase_approvals[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_purchase_approvals}_{_fc}_purchase_approvals")
                                 else:
-                                    _new_vals_purchase_approvals[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_purchase_approvals")
+                                    _new_vals_purchase_approvals[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_purchase_approvals}_{_fc}_purchase_approvals")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_approvals"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_approvals])
@@ -1270,6 +1695,91 @@ with tabs[6]:
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (견적(RFQ)) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_quotations = {}
@@ -1339,9 +1849,9 @@ with tabs[6]:
                                 _cv = _edit_row_quotations[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_quotations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_quotations")
+                                    _new_vals_quotations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_quotations}_{_fc}_quotations")
                                 else:
-                                    _new_vals_quotations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_quotations")
+                                    _new_vals_quotations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_quotations}_{_fc}_quotations")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_quotations"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_quotations])
@@ -1498,6 +2008,91 @@ with tabs[8]:
                 return ['']*len(row)
             st.dataframe(df.style.apply(exp_color, axis=1), use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (po_receipt_summary) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_po_receipt_summary = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM po_receipt_summary ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('po_id','')}"
+                        _row_opts_po_receipt_summary[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_po_receipt_summary:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_po_receipt_summary = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_po_receipt_summary.keys()),
+                        key="_rbsel_po_receipt_summary", label_visibility="collapsed"
+                    )
+                    _rb_id_po_receipt_summary = _row_opts_po_receipt_summary[_rb_sel_po_receipt_summary]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_po_receipt_summary"):
+                        st.session_state[f"_edit_po_receipt_summary"] = _rb_id_po_receipt_summary
+                        st.session_state[f"_del_po_receipt_summary"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_po_receipt_summary"):
+                        st.session_state[f"_del_po_receipt_summary"]  = _rb_id_po_receipt_summary
+                        st.session_state[f"_edit_po_receipt_summary"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_po_receipt_summary"):
+                    _del_id_po_receipt_summary = st.session_state[f"_del_po_receipt_summary"]
+                    st.warning(f"⚠️ ID **{_del_id_po_receipt_summary}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_po_receipt_summary"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM po_receipt_summary WHERE id = ?", (_del_id_po_receipt_summary,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_po_receipt_summary"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_po_receipt_summary"):
+                        st.session_state[f"_del_po_receipt_summary"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_po_receipt_summary"):
+                    _edit_id_po_receipt_summary = st.session_state[f"_edit_po_receipt_summary"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_po_receipt_summary = dict(_cx_e.execute(
+                            "SELECT * FROM po_receipt_summary WHERE id=?", (_edit_id_po_receipt_summary,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_po_receipt_summary = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_po_receipt_summary}", expanded=True):
+                        if not _edit_row_po_receipt_summary:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_po_receipt_summary = [c for c in _edit_row_po_receipt_summary if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_po_receipt_summary)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_po_receipt_summary = {}
+                            for _i, _fc in enumerate(_edit_fields_po_receipt_summary):
+                                _cv = _edit_row_po_receipt_summary[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_po_receipt_summary[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_po_receipt_summary}_{_fc}_po_receipt_summary")
+                                else:
+                                    _new_vals_po_receipt_summary[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_po_receipt_summary}_{_fc}_po_receipt_summary")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_po_receipt_summary"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_po_receipt_summary])
+                                _set_params = list(_new_vals_po_receipt_summary.values()) + [_edit_id_po_receipt_summary]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE po_receipt_summary SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_po_receipt_summary"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_po_receipt_summary"):
+                                st.session_state[f"_edit_po_receipt_summary"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (계약) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_supplier_contracts = {}
@@ -1567,9 +2162,9 @@ with tabs[8]:
                                 _cv = _edit_row_supplier_contracts[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_supplier_contracts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_supplier_contracts")
+                                    _new_vals_supplier_contracts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_supplier_contracts}_{_fc}_supplier_contracts")
                                 else:
-                                    _new_vals_supplier_contracts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_supplier_contracts")
+                                    _new_vals_supplier_contracts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_supplier_contracts}_{_fc}_supplier_contracts")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_supplier_contracts"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_supplier_contracts])
@@ -1720,9 +2315,9 @@ with tabs[9]:
                                 _cv = _edit_row_blanket_orders[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_blanket_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_blanket_orders")
+                                    _new_vals_blanket_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_blanket_orders}_{_fc}_blanket_orders")
                                 else:
-                                    _new_vals_blanket_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_blanket_orders")
+                                    _new_vals_blanket_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_blanket_orders}_{_fc}_blanket_orders")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_blanket_orders"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_blanket_orders])
@@ -1875,6 +2470,91 @@ with tabs[10]:
                 return ['']*len(row)
             st.dataframe(filtered.style.apply(po_color, axis=1), use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (blanket_order_releases) ──────────────────────────
+            if not filtered.empty if hasattr(filtered, 'empty') else filtered is not None:
+                _row_opts_blanket_order_releases = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM blanket_order_releases ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('id','')}"
+                        _row_opts_blanket_order_releases[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_blanket_order_releases:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_blanket_order_releases = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_blanket_order_releases.keys()),
+                        key="_rbsel_blanket_order_releases", label_visibility="collapsed"
+                    )
+                    _rb_id_blanket_order_releases = _row_opts_blanket_order_releases[_rb_sel_blanket_order_releases]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_blanket_order_releases"):
+                        st.session_state[f"_edit_blanket_order_releases"] = _rb_id_blanket_order_releases
+                        st.session_state[f"_del_blanket_order_releases"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_blanket_order_releases"):
+                        st.session_state[f"_del_blanket_order_releases"]  = _rb_id_blanket_order_releases
+                        st.session_state[f"_edit_blanket_order_releases"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_blanket_order_releases"):
+                    _del_id_blanket_order_releases = st.session_state[f"_del_blanket_order_releases"]
+                    st.warning(f"⚠️ ID **{_del_id_blanket_order_releases}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_blanket_order_releases"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM blanket_order_releases WHERE id = ?", (_del_id_blanket_order_releases,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_blanket_order_releases"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_blanket_order_releases"):
+                        st.session_state[f"_del_blanket_order_releases"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_blanket_order_releases"):
+                    _edit_id_blanket_order_releases = st.session_state[f"_edit_blanket_order_releases"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_blanket_order_releases = dict(_cx_e.execute(
+                            "SELECT * FROM blanket_order_releases WHERE id=?", (_edit_id_blanket_order_releases,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_blanket_order_releases = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_blanket_order_releases}", expanded=True):
+                        if not _edit_row_blanket_order_releases:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_blanket_order_releases = [c for c in _edit_row_blanket_order_releases if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_blanket_order_releases)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_blanket_order_releases = {}
+                            for _i, _fc in enumerate(_edit_fields_blanket_order_releases):
+                                _cv = _edit_row_blanket_order_releases[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_blanket_order_releases[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_blanket_order_releases}_{_fc}_blanket_order_releases")
+                                else:
+                                    _new_vals_blanket_order_releases[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_blanket_order_releases}_{_fc}_blanket_order_releases")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_blanket_order_releases"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_blanket_order_releases])
+                                _set_params = list(_new_vals_blanket_order_releases.values()) + [_edit_id_blanket_order_releases]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE blanket_order_releases SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_blanket_order_releases"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_blanket_order_releases"):
+                                st.session_state[f"_edit_blanket_order_releases"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (PO) ──────────────────────────
             if not filtered.empty if hasattr(filtered, 'empty') else filtered is not None:
                 _row_opts_purchase_orders = {}
@@ -1944,9 +2624,9 @@ with tabs[10]:
                                 _cv = _edit_row_purchase_orders[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_purchase_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_purchase_orders")
+                                    _new_vals_purchase_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_purchase_orders}_{_fc}_purchase_orders")
                                 else:
-                                    _new_vals_purchase_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_purchase_orders")
+                                    _new_vals_purchase_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_purchase_orders}_{_fc}_purchase_orders")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_orders"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_orders])
@@ -2002,6 +2682,91 @@ with tabs[10]:
             st.info("변경이력 없음")
         else:
             st.dataframe(df_chg, use_container_width=True, hide_index=True)
+
+            # ── 행 수정/삭제 버튼 (po_change_log) ──────────────────────────
+            if not df_chg.empty if hasattr(df_chg, 'empty') else df_chg is not None:
+                _row_opts_po_change_log = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM po_change_log ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('changed_field','')}"
+                        _row_opts_po_change_log[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_po_change_log:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_po_change_log = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_po_change_log.keys()),
+                        key="_rbsel_po_change_log", label_visibility="collapsed"
+                    )
+                    _rb_id_po_change_log = _row_opts_po_change_log[_rb_sel_po_change_log]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_po_change_log"):
+                        st.session_state[f"_edit_po_change_log"] = _rb_id_po_change_log
+                        st.session_state[f"_del_po_change_log"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_po_change_log"):
+                        st.session_state[f"_del_po_change_log"]  = _rb_id_po_change_log
+                        st.session_state[f"_edit_po_change_log"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_po_change_log"):
+                    _del_id_po_change_log = st.session_state[f"_del_po_change_log"]
+                    st.warning(f"⚠️ ID **{_del_id_po_change_log}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_po_change_log"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM po_change_log WHERE id = ?", (_del_id_po_change_log,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_po_change_log"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_po_change_log"):
+                        st.session_state[f"_del_po_change_log"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_po_change_log"):
+                    _edit_id_po_change_log = st.session_state[f"_edit_po_change_log"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_po_change_log = dict(_cx_e.execute(
+                            "SELECT * FROM po_change_log WHERE id=?", (_edit_id_po_change_log,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_po_change_log = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_po_change_log}", expanded=True):
+                        if not _edit_row_po_change_log:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_po_change_log = [c for c in _edit_row_po_change_log if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_po_change_log)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_po_change_log = {}
+                            for _i, _fc in enumerate(_edit_fields_po_change_log):
+                                _cv = _edit_row_po_change_log[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_po_change_log[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_po_change_log}_{_fc}_po_change_log")
+                                else:
+                                    _new_vals_po_change_log[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_po_change_log}_{_fc}_po_change_log")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_po_change_log"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_po_change_log])
+                                _set_params = list(_new_vals_po_change_log.values()) + [_edit_id_po_change_log]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE po_change_log SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_po_change_log"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_po_change_log"):
+                                st.session_state[f"_edit_po_change_log"] = None; st.rerun()
+
 
 # ── 12. 입고 GR ──────────────────────────────────────
 with tabs[11]:
@@ -2119,6 +2884,91 @@ with tabs[11]:
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
+            # ── 행 수정/삭제 버튼 (moving_avg_price) ──────────────────────────
+            if not df.empty if hasattr(df, 'empty') else df is not None:
+                _row_opts_moving_avg_price = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM moving_avg_price ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('item_name','')}"
+                        _row_opts_moving_avg_price[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_moving_avg_price:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_moving_avg_price = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_moving_avg_price.keys()),
+                        key="_rbsel_moving_avg_price", label_visibility="collapsed"
+                    )
+                    _rb_id_moving_avg_price = _row_opts_moving_avg_price[_rb_sel_moving_avg_price]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_moving_avg_price"):
+                        st.session_state[f"_edit_moving_avg_price"] = _rb_id_moving_avg_price
+                        st.session_state[f"_del_moving_avg_price"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"]  = _rb_id_moving_avg_price
+                        st.session_state[f"_edit_moving_avg_price"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_moving_avg_price"):
+                    _del_id_moving_avg_price = st.session_state[f"_del_moving_avg_price"]
+                    st.warning(f"⚠️ ID **{_del_id_moving_avg_price}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_moving_avg_price"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM moving_avg_price WHERE id = ?", (_del_id_moving_avg_price,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_moving_avg_price"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_moving_avg_price"):
+                        st.session_state[f"_del_moving_avg_price"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_moving_avg_price"):
+                    _edit_id_moving_avg_price = st.session_state[f"_edit_moving_avg_price"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_moving_avg_price = dict(_cx_e.execute(
+                            "SELECT * FROM moving_avg_price WHERE id=?", (_edit_id_moving_avg_price,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_moving_avg_price = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_moving_avg_price}", expanded=True):
+                        if not _edit_row_moving_avg_price:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_moving_avg_price = [c for c in _edit_row_moving_avg_price if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_moving_avg_price)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_moving_avg_price = {}
+                            for _i, _fc in enumerate(_edit_fields_moving_avg_price):
+                                _cv = _edit_row_moving_avg_price[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_moving_avg_price[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                                else:
+                                    _new_vals_moving_avg_price[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_moving_avg_price}_{_fc}_moving_avg_price")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_moving_avg_price"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_moving_avg_price])
+                                _set_params = list(_new_vals_moving_avg_price.values()) + [_edit_id_moving_avg_price]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE moving_avg_price SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_moving_avg_price"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_moving_avg_price"):
+                                st.session_state[f"_edit_moving_avg_price"] = None; st.rerun()
+
+
             # ── 행 수정/삭제 버튼 (GR) ──────────────────────────
             if not df.empty if hasattr(df, 'empty') else df is not None:
                 _row_opts_goods_receipts = {}
@@ -2188,9 +3038,9 @@ with tabs[11]:
                                 _cv = _edit_row_goods_receipts[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_goods_receipts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_goods_receipts")
+                                    _new_vals_goods_receipts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_goods_receipts}_{_fc}_goods_receipts")
                                 else:
-                                    _new_vals_goods_receipts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_goods_receipts")
+                                    _new_vals_goods_receipts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_goods_receipts}_{_fc}_goods_receipts")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_goods_receipts"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_goods_receipts])
@@ -2352,9 +3202,9 @@ with tabs[12]:
                                 _cv = _edit_row_return_to_vendor[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_return_to_vendor[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_return_to_vendor")
+                                    _new_vals_return_to_vendor[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_return_to_vendor}_{_fc}_return_to_vendor")
                                 else:
-                                    _new_vals_return_to_vendor[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_return_to_vendor")
+                                    _new_vals_return_to_vendor[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_return_to_vendor}_{_fc}_return_to_vendor")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_return_to_vendor"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_return_to_vendor])
@@ -2550,6 +3400,91 @@ with tabs[14]:
                 if row['대사결과'] == '완전일치': return ['background-color:#d1fae5']*len(row)
                 return ['']*len(row)
             st.dataframe(df_iv.style.apply(iv_color, axis=1), use_container_width=True, hide_index=True)
+
+            # ── 행 수정/삭제 버튼 (invoice_verifications) ──────────────────────────
+            if not df_iv.empty if hasattr(df_iv, 'empty') else df_iv is not None:
+                _row_opts_invoice_verifications = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM invoice_verifications ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('supplier','')}"
+                        _row_opts_invoice_verifications[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_invoice_verifications:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_invoice_verifications = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_invoice_verifications.keys()),
+                        key="_rbsel_invoice_verifications", label_visibility="collapsed"
+                    )
+                    _rb_id_invoice_verifications = _row_opts_invoice_verifications[_rb_sel_invoice_verifications]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_invoice_verifications"):
+                        st.session_state[f"_edit_invoice_verifications"] = _rb_id_invoice_verifications
+                        st.session_state[f"_del_invoice_verifications"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_invoice_verifications"):
+                        st.session_state[f"_del_invoice_verifications"]  = _rb_id_invoice_verifications
+                        st.session_state[f"_edit_invoice_verifications"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_invoice_verifications"):
+                    _del_id_invoice_verifications = st.session_state[f"_del_invoice_verifications"]
+                    st.warning(f"⚠️ ID **{_del_id_invoice_verifications}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_invoice_verifications"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM invoice_verifications WHERE id = ?", (_del_id_invoice_verifications,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_invoice_verifications"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_invoice_verifications"):
+                        st.session_state[f"_del_invoice_verifications"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_invoice_verifications"):
+                    _edit_id_invoice_verifications = st.session_state[f"_edit_invoice_verifications"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_invoice_verifications = dict(_cx_e.execute(
+                            "SELECT * FROM invoice_verifications WHERE id=?", (_edit_id_invoice_verifications,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_invoice_verifications = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_invoice_verifications}", expanded=True):
+                        if not _edit_row_invoice_verifications:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_invoice_verifications = [c for c in _edit_row_invoice_verifications if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_invoice_verifications)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_invoice_verifications = {}
+                            for _i, _fc in enumerate(_edit_fields_invoice_verifications):
+                                _cv = _edit_row_invoice_verifications[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_invoice_verifications[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_invoice_verifications}_{_fc}_invoice_verifications")
+                                else:
+                                    _new_vals_invoice_verifications[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_invoice_verifications}_{_fc}_invoice_verifications")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_invoice_verifications"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_invoice_verifications])
+                                _set_params = list(_new_vals_invoice_verifications.values()) + [_edit_id_invoice_verifications]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE invoice_verifications SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_invoice_verifications"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_invoice_verifications"):
+                                st.session_state[f"_edit_invoice_verifications"] = None; st.rerun()
+
             col_m1, col_m2, col_m3 = st.columns(3)
             col_m1.metric("총 검증건", len(df_iv))
             col_m2.metric("완전일치", len(df_iv[df_iv['대사결과']=='완전일치']))
@@ -2715,9 +3650,9 @@ with tabs[15]:
                                 _cv = _edit_row_purchase_tax_invoices[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_purchase_tax_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_purchase_tax_invoices")
+                                    _new_vals_purchase_tax_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_purchase_tax_invoices}_{_fc}_purchase_tax_invoices")
                                 else:
-                                    _new_vals_purchase_tax_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_purchase_tax_invoices")
+                                    _new_vals_purchase_tax_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_purchase_tax_invoices}_{_fc}_purchase_tax_invoices")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_purchase_tax_invoices"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_purchase_tax_invoices])
@@ -2769,8 +3704,91 @@ with tabs[16]:
             if row['지급예정일'] <= soon_pay: return ['background-color:#fef3c7']*len(row)
             return ['']*len(row)
         with tab_p1:
-            st.dataframe(df_pay.drop(columns=['id']).style.apply(pay_color, axis=1),
-                         use_container_width=True, hide_index=True)
+            st.dataframe(df_pay.drop(columns=['id']).style.apply(pay_color, axis=1), use_container_width=True, hide_index=True)
+
+            # ── 행 수정/삭제 버튼 (payment_schedule) ──────────────────────────
+            if not df_pay.empty if hasattr(df_pay, 'empty') else df_pay is not None:
+                _row_opts_payment_schedule = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM payment_schedule ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('supplier','')}"
+                        _row_opts_payment_schedule[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_payment_schedule:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_payment_schedule = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_payment_schedule.keys()),
+                        key="_rbsel_payment_schedule", label_visibility="collapsed"
+                    )
+                    _rb_id_payment_schedule = _row_opts_payment_schedule[_rb_sel_payment_schedule]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_payment_schedule"):
+                        st.session_state[f"_edit_payment_schedule"] = _rb_id_payment_schedule
+                        st.session_state[f"_del_payment_schedule"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_payment_schedule"):
+                        st.session_state[f"_del_payment_schedule"]  = _rb_id_payment_schedule
+                        st.session_state[f"_edit_payment_schedule"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_payment_schedule"):
+                    _del_id_payment_schedule = st.session_state[f"_del_payment_schedule"]
+                    st.warning(f"⚠️ ID **{_del_id_payment_schedule}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_payment_schedule"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM payment_schedule WHERE id = ?", (_del_id_payment_schedule,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_payment_schedule"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_payment_schedule"):
+                        st.session_state[f"_del_payment_schedule"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_payment_schedule"):
+                    _edit_id_payment_schedule = st.session_state[f"_edit_payment_schedule"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_payment_schedule = dict(_cx_e.execute(
+                            "SELECT * FROM payment_schedule WHERE id=?", (_edit_id_payment_schedule,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_payment_schedule = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_payment_schedule}", expanded=True):
+                        if not _edit_row_payment_schedule:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_payment_schedule = [c for c in _edit_row_payment_schedule if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_payment_schedule)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_payment_schedule = {}
+                            for _i, _fc in enumerate(_edit_fields_payment_schedule):
+                                _cv = _edit_row_payment_schedule[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_payment_schedule[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_payment_schedule}_{_fc}_payment_schedule")
+                                else:
+                                    _new_vals_payment_schedule[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_payment_schedule}_{_fc}_payment_schedule")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_payment_schedule"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_payment_schedule])
+                                _set_params = list(_new_vals_payment_schedule.values()) + [_edit_id_payment_schedule]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE payment_schedule SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_payment_schedule"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_payment_schedule"):
+                                st.session_state[f"_edit_payment_schedule"] = None; st.rerun()
         with tab_p2:
             df_unpaid = df_pay[df_pay['상태']=='미지급']
             st.dataframe(df_unpaid.drop(columns=['id']).style.apply(pay_color, axis=1),
@@ -2957,9 +3975,9 @@ with tabs[17]:
                                 _cv = _edit_row_supplier_evaluations[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_supplier_evaluations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_supplier_evaluations")
+                                    _new_vals_supplier_evaluations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_supplier_evaluations}_{_fc}_supplier_evaluations")
                                 else:
-                                    _new_vals_supplier_evaluations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_supplier_evaluations")
+                                    _new_vals_supplier_evaluations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_supplier_evaluations}_{_fc}_supplier_evaluations")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_supplier_evaluations"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_supplier_evaluations])
@@ -3686,6 +4704,176 @@ with tabs["vmi"]:
             needs=df_vmi[df_vmi['재고상태'].str.contains('보충')]
             if not needs.empty: st.error(f"⚠️ VMI 보충 필요: {len(needs)}건")
             st.dataframe(df_vmi,use_container_width=True,hide_index=True)
+
+            # ── 행 수정/삭제 버튼 (vmi_replenishments) ──────────────────────────
+            if not df_vmi.empty if hasattr(df_vmi, 'empty') else df_vmi is not None:
+                _row_opts_vmi_replenishments = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM vmi_replenishments ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('supplier_name','')}"
+                        _row_opts_vmi_replenishments[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_vmi_replenishments:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_vmi_replenishments = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_vmi_replenishments.keys()),
+                        key="_rbsel_vmi_replenishments", label_visibility="collapsed"
+                    )
+                    _rb_id_vmi_replenishments = _row_opts_vmi_replenishments[_rb_sel_vmi_replenishments]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_vmi_replenishments"):
+                        st.session_state[f"_edit_vmi_replenishments"] = _rb_id_vmi_replenishments
+                        st.session_state[f"_del_vmi_replenishments"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_vmi_replenishments"):
+                        st.session_state[f"_del_vmi_replenishments"]  = _rb_id_vmi_replenishments
+                        st.session_state[f"_edit_vmi_replenishments"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_vmi_replenishments"):
+                    _del_id_vmi_replenishments = st.session_state[f"_del_vmi_replenishments"]
+                    st.warning(f"⚠️ ID **{_del_id_vmi_replenishments}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_vmi_replenishments"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM vmi_replenishments WHERE id = ?", (_del_id_vmi_replenishments,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_vmi_replenishments"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_vmi_replenishments"):
+                        st.session_state[f"_del_vmi_replenishments"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_vmi_replenishments"):
+                    _edit_id_vmi_replenishments = st.session_state[f"_edit_vmi_replenishments"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_vmi_replenishments = dict(_cx_e.execute(
+                            "SELECT * FROM vmi_replenishments WHERE id=?", (_edit_id_vmi_replenishments,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_vmi_replenishments = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_vmi_replenishments}", expanded=True):
+                        if not _edit_row_vmi_replenishments:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_vmi_replenishments = [c for c in _edit_row_vmi_replenishments if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_vmi_replenishments)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_vmi_replenishments = {}
+                            for _i, _fc in enumerate(_edit_fields_vmi_replenishments):
+                                _cv = _edit_row_vmi_replenishments[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_vmi_replenishments[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_vmi_replenishments}_{_fc}_vmi_replenishments")
+                                else:
+                                    _new_vals_vmi_replenishments[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_vmi_replenishments}_{_fc}_vmi_replenishments")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_vmi_replenishments"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_vmi_replenishments])
+                                _set_params = list(_new_vals_vmi_replenishments.values()) + [_edit_id_vmi_replenishments]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE vmi_replenishments SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_vmi_replenishments"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_vmi_replenishments"):
+                                st.session_state[f"_edit_vmi_replenishments"] = None; st.rerun()
+
+
+            # ── 행 수정/삭제 버튼 (vmi_agreements) ──────────────────────────
+            if not df_vmi.empty if hasattr(df_vmi, 'empty') else df_vmi is not None:
+                _row_opts_vmi_agreements = {}
+                try:
+                    _cx_opt = get_db()
+                    _opt_rs = [dict(r) for r in _cx_opt.execute(
+                        "SELECT id, * FROM vmi_agreements ORDER BY id DESC LIMIT 300"
+                    ).fetchall()]
+                    _cx_opt.close()
+                    for _r in _opt_rs:
+                        _k = f"{_r['id']} | {_r.get('supplier_name','')}"
+                        _row_opts_vmi_agreements[_k] = _r['id']
+                except Exception:
+                    pass
+            
+                if _row_opts_vmi_agreements:
+                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                    _rb_sel_vmi_agreements = _rb_sel_col.selectbox(
+                        "행 선택", list(_row_opts_vmi_agreements.keys()),
+                        key="_rbsel_vmi_agreements", label_visibility="collapsed"
+                    )
+                    _rb_id_vmi_agreements = _row_opts_vmi_agreements[_rb_sel_vmi_agreements]
+            
+                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_vmi_agreements"):
+                        st.session_state[f"_edit_vmi_agreements"] = _rb_id_vmi_agreements
+                        st.session_state[f"_del_vmi_agreements"]  = None
+            
+                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_vmi_agreements"):
+                        st.session_state[f"_del_vmi_agreements"]  = _rb_id_vmi_agreements
+                        st.session_state[f"_edit_vmi_agreements"] = None
+            
+                # ── 삭제 확인 ──────────────────────────────────────────
+                if st.session_state.get(f"_del_vmi_agreements"):
+                    _del_id_vmi_agreements = st.session_state[f"_del_vmi_agreements"]
+                    st.warning(f"⚠️ ID **{_del_id_vmi_agreements}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                    _dc1, _dc2 = st.columns(2)
+                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_vmi_agreements"):
+                        _cx_d = get_db()
+                        _cx_d.execute("DELETE FROM vmi_agreements WHERE id = ?", (_del_id_vmi_agreements,))
+                        _cx_d.commit(); _cx_d.close()
+                        st.session_state[f"_del_vmi_agreements"] = None
+                        st.success("✅ 삭제 완료!"); st.rerun()
+                    if _dc2.button("취소", use_container_width=True, key="_delcancel_vmi_agreements"):
+                        st.session_state[f"_del_vmi_agreements"] = None; st.rerun()
+            
+                # ── 수정 인라인 폼 ─────────────────────────────────────
+                if st.session_state.get(f"_edit_vmi_agreements"):
+                    _edit_id_vmi_agreements = st.session_state[f"_edit_vmi_agreements"]
+                    try:
+                        _cx_e = get_db()
+                        _edit_row_vmi_agreements = dict(_cx_e.execute(
+                            "SELECT * FROM vmi_agreements WHERE id=?", (_edit_id_vmi_agreements,)
+                        ).fetchone() or {})
+                        _cx_e.close()
+                    except Exception:
+                        _edit_row_vmi_agreements = {}
+                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_vmi_agreements}", expanded=True):
+                        if not _edit_row_vmi_agreements:
+                            st.warning("데이터를 불러올 수 없습니다.")
+                        else:
+                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                            _edit_fields_vmi_agreements = [c for c in _edit_row_vmi_agreements if c not in _skip_cols]
+                            _ncols = min(3, max(1, len(_edit_fields_vmi_agreements)))
+                            _ecols = st.columns(_ncols)
+                            _new_vals_vmi_agreements = {}
+                            for _i, _fc in enumerate(_edit_fields_vmi_agreements):
+                                _cv = _edit_row_vmi_agreements[_fc]
+                                _ec = _ecols[_i % _ncols]
+                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                    _new_vals_vmi_agreements[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_vmi_agreements}_{_fc}_vmi_agreements")
+                                else:
+                                    _new_vals_vmi_agreements[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_vmi_agreements}_{_fc}_vmi_agreements")
+                            _s1, _s2 = st.columns(2)
+                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_vmi_agreements"):
+                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_vmi_agreements])
+                                _set_params = list(_new_vals_vmi_agreements.values()) + [_edit_id_vmi_agreements]
+                                _cx_s = get_db()
+                                _cx_s.execute(f"UPDATE vmi_agreements SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.commit(); _cx_s.close()
+                                st.session_state[f"_edit_vmi_agreements"] = None
+                                st.success("✅ 수정 저장 완료!"); st.rerun()
+                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_vmi_agreements"):
+                                st.session_state[f"_edit_vmi_agreements"] = None; st.rerun()
+
         st.divider()
         st.subheader("보충요청 이력")
         if not df_rep.empty: st.dataframe(df_rep,use_container_width=True,hide_index=True)

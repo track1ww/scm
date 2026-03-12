@@ -172,9 +172,9 @@ with tabs["cust"]:
                                 _cv = _edit_row_customers[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_customers[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_customers")
+                                    _new_vals_customers[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_customers}_{_fc}_customers")
                                 else:
-                                    _new_vals_customers[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_customers")
+                                    _new_vals_customers[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_customers}_{_fc}_customers")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_customers"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_customers])
@@ -284,9 +284,9 @@ with tabs["price"]:
                             _cv = _edit_row_price_conditions[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_price_conditions[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_price_conditions")
+                                _new_vals_price_conditions[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_price_conditions}_{_fc}_price_conditions")
                             else:
-                                _new_vals_price_conditions[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_price_conditions")
+                                _new_vals_price_conditions[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_price_conditions}_{_fc}_price_conditions")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_price_conditions"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_price_conditions])
@@ -417,9 +417,9 @@ with tabs["sdq"]:
                             _cv = _edit_row_sd_quotations[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_sd_quotations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_sd_quotations")
+                                _new_vals_sd_quotations[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_sd_quotations}_{_fc}_sd_quotations")
                             else:
-                                _new_vals_sd_quotations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_sd_quotations")
+                                _new_vals_sd_quotations[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_sd_quotations}_{_fc}_sd_quotations")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_sd_quotations"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_sd_quotations])
@@ -551,9 +551,9 @@ with tabs["so"]:
                                 _cv = _edit_row_sales_orders[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_sales_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_sales_orders")
+                                    _new_vals_sales_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_sales_orders}_{_fc}_sales_orders")
                                 else:
-                                    _new_vals_sales_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_sales_orders")
+                                    _new_vals_sales_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_sales_orders}_{_fc}_sales_orders")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_sales_orders"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_sales_orders])
@@ -701,9 +701,9 @@ with tabs["deli"]:
                             _cv = _edit_row_deliveries[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_deliveries[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_deliveries")
+                                _new_vals_deliveries[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_deliveries}_{_fc}_deliveries")
                             else:
-                                _new_vals_deliveries[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_deliveries")
+                                _new_vals_deliveries[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_deliveries}_{_fc}_deliveries")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_deliveries"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_deliveries])
@@ -834,9 +834,9 @@ with tabs["ret"]:
                                 _cv = _edit_row_returns[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_returns[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_returns")
+                                    _new_vals_returns[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_returns}_{_fc}_returns")
                                 else:
-                                    _new_vals_returns[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_returns")
+                                    _new_vals_returns[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_returns}_{_fc}_returns")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_returns"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_returns])
@@ -967,9 +967,9 @@ with tabs["inv"]:
                                 _cv = _edit_row_invoices[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_invoices")
+                                    _new_vals_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_invoices}_{_fc}_invoices")
                                 else:
-                                    _new_vals_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_invoices")
+                                    _new_vals_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_invoices}_{_fc}_invoices")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_invoices"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_invoices])
@@ -1082,9 +1082,9 @@ with tabs["sti"]:
                                 _cv = _edit_row_sales_tax_invoices[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_sales_tax_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_sales_tax_invoices")
+                                    _new_vals_sales_tax_invoices[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_sales_tax_invoices}_{_fc}_sales_tax_invoices")
                                 else:
-                                    _new_vals_sales_tax_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_sales_tax_invoices")
+                                    _new_vals_sales_tax_invoices[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_sales_tax_invoices}_{_fc}_sales_tax_invoices")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_sales_tax_invoices"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_sales_tax_invoices])
@@ -1191,9 +1191,9 @@ with tabs["ar"]:
                             _cv = _edit_row_ar_receipts[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_ar_receipts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_ar_receipts")
+                                _new_vals_ar_receipts[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_ar_receipts}_{_fc}_ar_receipts")
                             else:
-                                _new_vals_ar_receipts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_ar_receipts")
+                                _new_vals_ar_receipts[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_ar_receipts}_{_fc}_ar_receipts")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_ar_receipts"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_ar_receipts])
@@ -1322,6 +1322,91 @@ with tabs["so_pp"]:
     else:
         st.warning(f"⚠️ 생산계획 미연결 SO: {len(df_so_link)}건")
         st.dataframe(df_so_link.drop(columns=['id']), use_container_width=True, hide_index=True)
+
+        # ── 행 수정/삭제 버튼 (production_plans) ──────────────────────────
+        if not df_so_link.empty if hasattr(df_so_link, 'empty') else df_so_link is not None:
+            _row_opts_production_plans = {}
+            try:
+                _cx_opt = get_db()
+                _opt_rs = [dict(r) for r in _cx_opt.execute(
+                    "SELECT id, * FROM production_plans ORDER BY id DESC LIMIT 300"
+                ).fetchall()]
+                _cx_opt.close()
+                for _r in _opt_rs:
+                    _k = f"{_r['id']} | {_r.get('품목명','')}"
+                    _row_opts_production_plans[_k] = _r['id']
+            except Exception:
+                pass
+
+            if _row_opts_production_plans:
+                _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                _rb_sel_production_plans = _rb_sel_col.selectbox(
+                    "행 선택", list(_row_opts_production_plans.keys()),
+                    key="_rbsel_production_plans", label_visibility="collapsed"
+                )
+                _rb_id_production_plans = _row_opts_production_plans[_rb_sel_production_plans]
+
+                if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_production_plans"):
+                    st.session_state[f"_edit_production_plans"] = _rb_id_production_plans
+                    st.session_state[f"_del_production_plans"]  = None
+
+                if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_production_plans"):
+                    st.session_state[f"_del_production_plans"]  = _rb_id_production_plans
+                    st.session_state[f"_edit_production_plans"] = None
+
+            # ── 삭제 확인 ──────────────────────────────────────────
+            if st.session_state.get(f"_del_production_plans"):
+                _del_id_production_plans = st.session_state[f"_del_production_plans"]
+                st.warning(f"⚠️ ID **{_del_id_production_plans}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                _dc1, _dc2 = st.columns(2)
+                if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_production_plans"):
+                    _cx_d = get_db()
+                    _cx_d.execute("DELETE FROM production_plans WHERE id = ?", (_del_id_production_plans,))
+                    _cx_d.commit(); _cx_d.close()
+                    st.session_state[f"_del_production_plans"] = None
+                    st.success("✅ 삭제 완료!"); st.rerun()
+                if _dc2.button("취소", use_container_width=True, key="_delcancel_production_plans"):
+                    st.session_state[f"_del_production_plans"] = None; st.rerun()
+
+            # ── 수정 인라인 폼 ─────────────────────────────────────
+            if st.session_state.get(f"_edit_production_plans"):
+                _edit_id_production_plans = st.session_state[f"_edit_production_plans"]
+                try:
+                    _cx_e = get_db()
+                    _edit_row_production_plans = dict(_cx_e.execute(
+                        "SELECT * FROM production_plans WHERE id=?", (_edit_id_production_plans,)
+                    ).fetchone() or {})
+                    _cx_e.close()
+                except Exception:
+                    _edit_row_production_plans = {}
+                with st.expander(f"✏️ 정보 수정 — ID {_edit_id_production_plans}", expanded=True):
+                    if not _edit_row_production_plans:
+                        st.warning("데이터를 불러올 수 없습니다.")
+                    else:
+                        _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                        _edit_fields_production_plans = [c for c in _edit_row_production_plans if c not in _skip_cols]
+                        _ncols = min(3, max(1, len(_edit_fields_production_plans)))
+                        _ecols = st.columns(_ncols)
+                        _new_vals_production_plans = {}
+                        for _i, _fc in enumerate(_edit_fields_production_plans):
+                            _cv = _edit_row_production_plans[_fc]
+                            _ec = _ecols[_i % _ncols]
+                            if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                _new_vals_production_plans[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_production_plans}_{_fc}_production_plans")
+                            else:
+                                _new_vals_production_plans[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_production_plans}_{_fc}_production_plans")
+                        _s1, _s2 = st.columns(2)
+                        if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_production_plans"):
+                            _set_sql = ", ".join([f"{c}=?" for c in _new_vals_production_plans])
+                            _set_params = list(_new_vals_production_plans.values()) + [_edit_id_production_plans]
+                            _cx_s = get_db()
+                            _cx_s.execute(f"UPDATE production_plans SET {_set_sql} WHERE id=?", _set_params)
+                            _cx_s.commit(); _cx_s.close()
+                            st.session_state[f"_edit_production_plans"] = None
+                            st.success("✅ 수정 저장 완료!"); st.rerun()
+                        if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_production_plans"):
+                            st.session_state[f"_edit_production_plans"] = None; st.rerun()
+
         st.divider()
         st.subheader("생산계획 자동 생성")
         so_map={f"{r['SO번호']}-{r['고객']}/{r['품목']}":r for _,r in df_so_link.iterrows()}
@@ -1570,9 +1655,9 @@ with tabs["packing"]:
                             _cv = _edit_row_packing_lists[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_packing_lists[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_packing_lists")
+                                _new_vals_packing_lists[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_packing_lists}_{_fc}_packing_lists")
                             else:
-                                _new_vals_packing_lists[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_packing_lists")
+                                _new_vals_packing_lists[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_packing_lists}_{_fc}_packing_lists")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_packing_lists"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_packing_lists])
@@ -1677,8 +1762,91 @@ with tabs["bi_target"]:
                     legend=dict(orientation="h",y=1.1),
                     yaxis2=dict(overlaying='y',side='right',title='달성률%'))
                 st.plotly_chart(fig,use_container_width=True)
-                st.dataframe(df_merge[['ym','목표금액','실적금액','달성률%']].rename(columns={'ym':'월'}),
-                             use_container_width=True,hide_index=True)
+                st.dataframe(df_merge[['ym','목표금액','실적금액','달성률%']].rename(columns={'ym':'월'}), use_container_width=True, hide_index=True)
+
+                # ── 행 수정/삭제 버튼 (sales_targets) ──────────────────────────
+                if not df_merge.empty if hasattr(df_merge, 'empty') else df_merge is not None:
+                    _row_opts_sales_targets = {}
+                    try:
+                        _cx_opt = get_db()
+                        _opt_rs = [dict(r) for r in _cx_opt.execute(
+                            "SELECT id, * FROM sales_targets ORDER BY id DESC LIMIT 300"
+                        ).fetchall()]
+                        _cx_opt.close()
+                        for _r in _opt_rs:
+                            _k = f"{_r['id']} | {_r.get('item_name','')}"
+                            _row_opts_sales_targets[_k] = _r['id']
+                    except Exception:
+                        pass
+    
+                    if _row_opts_sales_targets:
+                        _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
+                        _rb_sel_sales_targets = _rb_sel_col.selectbox(
+                            "행 선택", list(_row_opts_sales_targets.keys()),
+                            key="_rbsel_sales_targets", label_visibility="collapsed"
+                        )
+                        _rb_id_sales_targets = _row_opts_sales_targets[_rb_sel_sales_targets]
+    
+                        if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_sales_targets"):
+                            st.session_state[f"_edit_sales_targets"] = _rb_id_sales_targets
+                            st.session_state[f"_del_sales_targets"]  = None
+    
+                        if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_sales_targets"):
+                            st.session_state[f"_del_sales_targets"]  = _rb_id_sales_targets
+                            st.session_state[f"_edit_sales_targets"] = None
+    
+                    # ── 삭제 확인 ──────────────────────────────────────────
+                    if st.session_state.get(f"_del_sales_targets"):
+                        _del_id_sales_targets = st.session_state[f"_del_sales_targets"]
+                        st.warning(f"⚠️ ID **{_del_id_sales_targets}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                        _dc1, _dc2 = st.columns(2)
+                        if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_sales_targets"):
+                            _cx_d = get_db()
+                            _cx_d.execute("DELETE FROM sales_targets WHERE id = ?", (_del_id_sales_targets,))
+                            _cx_d.commit(); _cx_d.close()
+                            st.session_state[f"_del_sales_targets"] = None
+                            st.success("✅ 삭제 완료!"); st.rerun()
+                        if _dc2.button("취소", use_container_width=True, key="_delcancel_sales_targets"):
+                            st.session_state[f"_del_sales_targets"] = None; st.rerun()
+    
+                    # ── 수정 인라인 폼 ─────────────────────────────────────
+                    if st.session_state.get(f"_edit_sales_targets"):
+                        _edit_id_sales_targets = st.session_state[f"_edit_sales_targets"]
+                        try:
+                            _cx_e = get_db()
+                            _edit_row_sales_targets = dict(_cx_e.execute(
+                                "SELECT * FROM sales_targets WHERE id=?", (_edit_id_sales_targets,)
+                            ).fetchone() or {})
+                            _cx_e.close()
+                        except Exception:
+                            _edit_row_sales_targets = {}
+                        with st.expander(f"✏️ 정보 수정 — ID {_edit_id_sales_targets}", expanded=True):
+                            if not _edit_row_sales_targets:
+                                st.warning("데이터를 불러올 수 없습니다.")
+                            else:
+                                _skip_cols = {'id','created_at','updated_at','ordered_at'}
+                                _edit_fields_sales_targets = [c for c in _edit_row_sales_targets if c not in _skip_cols]
+                                _ncols = min(3, max(1, len(_edit_fields_sales_targets)))
+                                _ecols = st.columns(_ncols)
+                                _new_vals_sales_targets = {}
+                                for _i, _fc in enumerate(_edit_fields_sales_targets):
+                                    _cv = _edit_row_sales_targets[_fc]
+                                    _ec = _ecols[_i % _ncols]
+                                    if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
+                                        _new_vals_sales_targets[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_sales_targets}_{_fc}_sales_targets")
+                                    else:
+                                        _new_vals_sales_targets[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_sales_targets}_{_fc}_sales_targets")
+                                _s1, _s2 = st.columns(2)
+                                if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_sales_targets"):
+                                    _set_sql = ", ".join([f"{c}=?" for c in _new_vals_sales_targets])
+                                    _set_params = list(_new_vals_sales_targets.values()) + [_edit_id_sales_targets]
+                                    _cx_s = get_db()
+                                    _cx_s.execute(f"UPDATE sales_targets SET {_set_sql} WHERE id=?", _set_params)
+                                    _cx_s.commit(); _cx_s.close()
+                                    st.session_state[f"_edit_sales_targets"] = None
+                                    st.success("✅ 수정 저장 완료!"); st.rerun()
+                                if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_sales_targets"):
+                                    st.session_state[f"_edit_sales_targets"] = None; st.rerun()
 
 # ══ 고객 신용한도 관리 ══════════════════════════════════════════
 with tabs["credit"]:
@@ -1982,9 +2150,9 @@ with tabs["prepay"]:
                                 _cv = _edit_row_prepayments[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_prepayments[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_prepayments")
+                                    _new_vals_prepayments[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_prepayments}_{_fc}_prepayments")
                                 else:
-                                    _new_vals_prepayments[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_prepayments")
+                                    _new_vals_prepayments[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_prepayments}_{_fc}_prepayments")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_prepayments"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_prepayments])
@@ -2122,9 +2290,9 @@ with tabs["as_"]:
                                 _cv = _edit_row_as_requests[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_as_requests[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_as_requests")
+                                    _new_vals_as_requests[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_as_requests}_{_fc}_as_requests")
                                 else:
-                                    _new_vals_as_requests[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_as_requests")
+                                    _new_vals_as_requests[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_as_requests}_{_fc}_as_requests")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_as_requests"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_as_requests])
@@ -2247,9 +2415,9 @@ with tabs["sales_mgr"]:
                             _cv = _edit_row_sales_reps[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_sales_reps[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_sales_reps")
+                                _new_vals_sales_reps[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_sales_reps}_{_fc}_sales_reps")
                             else:
-                                _new_vals_sales_reps[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_sales_reps")
+                                _new_vals_sales_reps[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_sales_reps}_{_fc}_sales_reps")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_sales_reps"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_sales_reps])

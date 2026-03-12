@@ -155,9 +155,9 @@ with tabs["iplan"]:
                             _cv = _edit_row_inspection_plans[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_inspection_plans[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_inspection_plans")
+                                _new_vals_inspection_plans[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_inspection_plans}_{_fc}_inspection_plans")
                             else:
-                                _new_vals_inspection_plans[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_inspection_plans")
+                                _new_vals_inspection_plans[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_inspection_plans}_{_fc}_inspection_plans")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_inspection_plans"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_inspection_plans])
@@ -284,9 +284,9 @@ with tabs["insp"]:
                                 _cv = _edit_row_quality_inspections[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_quality_inspections[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_quality_inspections")
+                                    _new_vals_quality_inspections[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_quality_inspections}_{_fc}_quality_inspections")
                                 else:
-                                    _new_vals_quality_inspections[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_quality_inspections")
+                                    _new_vals_quality_inspections[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_quality_inspections}_{_fc}_quality_inspections")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_quality_inspections"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_quality_inspections])
@@ -436,9 +436,9 @@ with tabs["nc"]:
                                 _cv = _edit_row_nonconformance[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_nonconformance[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_nonconformance")
+                                    _new_vals_nonconformance[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_nonconformance}_{_fc}_nonconformance")
                                 else:
-                                    _new_vals_nonconformance[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_nonconformance")
+                                    _new_vals_nonconformance[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_nonconformance}_{_fc}_nonconformance")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_nonconformance"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_nonconformance])
@@ -547,9 +547,9 @@ with tabs["capa"]:
                             _cv = _edit_row_capa_actions[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_capa_actions[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_capa_actions")
+                                _new_vals_capa_actions[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_capa_actions}_{_fc}_capa_actions")
                             else:
-                                _new_vals_capa_actions[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_capa_actions")
+                                _new_vals_capa_actions[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_capa_actions}_{_fc}_capa_actions")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_capa_actions"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_capa_actions])
@@ -677,9 +677,9 @@ with tabs["claim"]:
                                 _cv = _edit_row_customer_complaints[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_customer_complaints[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_customer_complaints")
+                                    _new_vals_customer_complaints[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_customer_complaints}_{_fc}_customer_complaints")
                                 else:
-                                    _new_vals_customer_complaints[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_customer_complaints")
+                                    _new_vals_customer_complaints[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_customer_complaints}_{_fc}_customer_complaints")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_customer_complaints"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_customer_complaints])
@@ -808,9 +808,9 @@ with tabs["instr"]:
                                 _cv = _edit_row_measuring_instruments[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_measuring_instruments[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_measuring_instruments")
+                                    _new_vals_measuring_instruments[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_measuring_instruments}_{_fc}_measuring_instruments")
                                 else:
-                                    _new_vals_measuring_instruments[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_measuring_instruments")
+                                    _new_vals_measuring_instruments[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_measuring_instruments}_{_fc}_measuring_instruments")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_measuring_instruments"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_measuring_instruments])
@@ -1037,9 +1037,9 @@ with tabs["d8"]:
                                 _cv = _edit_row_d8_reports[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_d8_reports[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_d8_reports")
+                                    _new_vals_d8_reports[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_d8_reports}_{_fc}_d8_reports")
                                 else:
-                                    _new_vals_d8_reports[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_d8_reports")
+                                    _new_vals_d8_reports[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_d8_reports}_{_fc}_d8_reports")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_d8_reports"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_d8_reports])
@@ -1169,9 +1169,9 @@ with tabs["audit_plan"]:
                                 _cv = _edit_row_supplier_audits[_fc]
                                 _ec = _ecols[_i % _ncols]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_supplier_audits[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_supplier_audits")
+                                    _new_vals_supplier_audits[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_supplier_audits}_{_fc}_supplier_audits")
                                 else:
-                                    _new_vals_supplier_audits[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_supplier_audits")
+                                    _new_vals_supplier_audits[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_supplier_audits}_{_fc}_supplier_audits")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_supplier_audits"):
                                 _set_sql = ", ".join([f"{c}=?" for c in _new_vals_supplier_audits])
@@ -1290,9 +1290,9 @@ with tabs["audit_exec"]:
                             _cv = _edit_row_audit_findings[_fc]
                             _ec = _ecols[_i % _ncols]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_audit_findings[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_audit_findings")
+                                _new_vals_audit_findings[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_audit_findings}_{_fc}_audit_findings")
                             else:
-                                _new_vals_audit_findings[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_audit_findings")
+                                _new_vals_audit_findings[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_audit_findings}_{_fc}_audit_findings")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_audit_findings"):
                             _set_sql = ", ".join([f"{c}=?" for c in _new_vals_audit_findings])
