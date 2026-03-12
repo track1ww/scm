@@ -87,17 +87,21 @@ with tabs["bom"]:
             df_show=df_b if pf=="전체" else df_b[df_b['완제품']==pf]
             st.dataframe(df_show,use_container_width=True,hide_index=True)
 
-            # ── 행 수정/삭제 버튼 (BOM) ──────────────────────────
-            if not df_show.empty if hasattr(df_show, 'empty') else df_show is not None:
+            # ── 행 수정/삭제 (BOM) ──────────────────────────────
+            try:
+                _has_data_bom = (not df_show.empty) if hasattr(df_show, 'empty') else bool(df_show is not None)
+            except Exception:
+                _has_data_bom = False
+            if _has_data_bom:
                 _row_opts_bom = {}
                 try:
                     _cx_opt = get_db()
                     _opt_rs = [dict(r) for r in _cx_opt.execute(
-                        "SELECT id, 모품목코드 FROM bom ORDER BY id DESC LIMIT 300"
+                        "SELECT id, product_name FROM bom ORDER BY id DESC LIMIT 300"
                     ).fetchall()]
                     _cx_opt.close()
                     for _r in _opt_rs:
-                        _k = f"{_r['id']} | {_r.get('모품목코드','')}"
+                        _k = f"{_r['id']} | {_r.get('product_name','')}"
                         _row_opts_bom[_k] = _r['id']
                 except Exception:
                     pass
@@ -109,32 +113,30 @@ with tabs["bom"]:
                         key="_rbsel_bom", label_visibility="collapsed"
                     )
                     _rb_id_bom = _row_opts_bom[_rb_sel_bom]
-
                     if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_bom"):
-                        st.session_state[f"_edit_bom"] = _rb_id_bom
-                        st.session_state[f"_del_bom"]  = None
-
+                        st.session_state["_edit_bom"] = _rb_id_bom
+                        st.session_state["_del_bom"]  = None
                     if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_bom"):
-                        st.session_state[f"_del_bom"]  = _rb_id_bom
-                        st.session_state[f"_edit_bom"] = None
+                        st.session_state["_del_bom"]  = _rb_id_bom
+                        st.session_state["_edit_bom"] = None
 
-                # ── 삭제 확인 ──────────────────────────────────────────
-                if st.session_state.get(f"_del_bom"):
-                    _del_id_bom = st.session_state[f"_del_bom"]
-                    st.warning(f"⚠️ ID **{_del_id_bom}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                # ── 삭제 확인 ──
+                if st.session_state.get("_del_bom"):
+                    _del_id_bom = st.session_state["_del_bom"]
+                    st.warning(f"⚠️ ID **{_del_id_bom}** 항목을 삭제합니다. 복구 불가.")
                     _dc1, _dc2 = st.columns(2)
                     if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_bom"):
                         _cx_d = get_db()
                         _cx_d.execute("DELETE FROM bom WHERE id = ?", (_del_id_bom,))
                         _cx_d.commit(); _cx_d.close()
-                        st.session_state[f"_del_bom"] = None
+                        st.session_state["_del_bom"] = None
                         st.success("✅ 삭제 완료!"); st.rerun()
                     if _dc2.button("취소", use_container_width=True, key="_delcancel_bom"):
-                        st.session_state[f"_del_bom"] = None; st.rerun()
+                        st.session_state["_del_bom"] = None; st.rerun()
 
-                # ── 수정 인라인 폼 ─────────────────────────────────────
-                if st.session_state.get(f"_edit_bom"):
-                    _edit_id_bom = st.session_state[f"_edit_bom"]
+                # ── 수정 인라인 폼 ──
+                if st.session_state.get("_edit_bom"):
+                    _edit_id_bom = st.session_state["_edit_bom"]
                     try:
                         _cx_e = get_db()
                         _edit_row_bom = dict(_cx_e.execute(
@@ -147,29 +149,28 @@ with tabs["bom"]:
                         if not _edit_row_bom:
                             st.warning("데이터를 불러올 수 없습니다.")
                         else:
-                            _skip_cols = {'id','created_at','updated_at'}
-                            _edit_fields_bom = [c for c in _edit_row_bom if c not in _skip_cols]
-                            _ncols = min(3, max(1, len(_edit_fields_bom)))
-                            _ecols = st.columns(_ncols)
-                            _new_vals_bom = {}
-                            for _i, _fc in enumerate(_edit_fields_bom):
+                            _skip = {'id','created_at','updated_at'}
+                            _flds = [c for c in _edit_row_bom if c not in _skip]
+                            _nc = min(3, max(1, len(_flds)))
+                            _ecols = st.columns(_nc)
+                            _nv = {}
+                            for _i, _fc in enumerate(_flds):
                                 _cv = _edit_row_bom[_fc]
-                                _ec = _ecols[_i % _ncols]
+                                _gc = _ecols[_i % _nc]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_bom[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_bom}_{_fc}_bom")
+                                    _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_bom")
                                 else:
-                                    _new_vals_bom[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_bom}_{_fc}_bom")
+                                    _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_bom")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_bom"):
-                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_bom])
-                                _set_params = list(_new_vals_bom.values()) + [_edit_id_bom]
+                                _set_sql = ", ".join([f"{c}=?" for c in _nv])
                                 _cx_s = get_db()
-                                _cx_s.execute(f"UPDATE bom SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.execute(f"UPDATE bom SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_bom])
                                 _cx_s.commit(); _cx_s.close()
-                                st.session_state[f"_edit_bom"] = None
+                                st.session_state["_edit_bom"] = None
                                 st.success("✅ 수정 저장 완료!"); st.rerun()
                             if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_bom"):
-                                st.session_state[f"_edit_bom"] = None; st.rerun()
+                                st.session_state["_edit_bom"] = None; st.rerun()
 
             if pf!="전체":
                 st.caption(f"📊 총 구성자재: {len(df_show)}종 / 총 소요수량 합계: {df_show['소요수량'].sum():.2f}")
@@ -195,17 +196,21 @@ with tabs["routing"]:
             rpf=st.selectbox("완제품 필터",["전체"]+df_rt['완제품'].unique().tolist())
             st.dataframe(df_rt if rpf=="전체" else df_rt[df_rt['완제품']==rpf],use_container_width=True,hide_index=True)
 
-            # ── 행 수정/삭제 버튼 (라우팅) ──────────────────────────
-            if not df_rt.empty if hasattr(df_rt, 'empty') else df_rt is not None:
+            # ── 행 수정/삭제 (라우팅) ──────────────────────────────
+            try:
+                _has_data_routings = (not df_rt.empty) if hasattr(df_rt, 'empty') else bool(df_rt is not None)
+            except Exception:
+                _has_data_routings = False
+            if _has_data_routings:
                 _row_opts_routings = {}
                 try:
                     _cx_opt = get_db()
                     _opt_rs = [dict(r) for r in _cx_opt.execute(
-                        "SELECT id, 제품명 FROM routings ORDER BY id DESC LIMIT 300"
+                        "SELECT id, product_name FROM routings ORDER BY id DESC LIMIT 300"
                     ).fetchall()]
                     _cx_opt.close()
                     for _r in _opt_rs:
-                        _k = f"{_r['id']} | {_r.get('제품명','')}"
+                        _k = f"{_r['id']} | {_r.get('product_name','')}"
                         _row_opts_routings[_k] = _r['id']
                 except Exception:
                     pass
@@ -217,32 +222,30 @@ with tabs["routing"]:
                         key="_rbsel_routings", label_visibility="collapsed"
                     )
                     _rb_id_routings = _row_opts_routings[_rb_sel_routings]
-
                     if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_routings"):
-                        st.session_state[f"_edit_routings"] = _rb_id_routings
-                        st.session_state[f"_del_routings"]  = None
-
+                        st.session_state["_edit_routings"] = _rb_id_routings
+                        st.session_state["_del_routings"]  = None
                     if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_routings"):
-                        st.session_state[f"_del_routings"]  = _rb_id_routings
-                        st.session_state[f"_edit_routings"] = None
+                        st.session_state["_del_routings"]  = _rb_id_routings
+                        st.session_state["_edit_routings"] = None
 
-                # ── 삭제 확인 ──────────────────────────────────────────
-                if st.session_state.get(f"_del_routings"):
-                    _del_id_routings = st.session_state[f"_del_routings"]
-                    st.warning(f"⚠️ ID **{_del_id_routings}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                # ── 삭제 확인 ──
+                if st.session_state.get("_del_routings"):
+                    _del_id_routings = st.session_state["_del_routings"]
+                    st.warning(f"⚠️ ID **{_del_id_routings}** 항목을 삭제합니다. 복구 불가.")
                     _dc1, _dc2 = st.columns(2)
                     if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_routings"):
                         _cx_d = get_db()
                         _cx_d.execute("DELETE FROM routings WHERE id = ?", (_del_id_routings,))
                         _cx_d.commit(); _cx_d.close()
-                        st.session_state[f"_del_routings"] = None
+                        st.session_state["_del_routings"] = None
                         st.success("✅ 삭제 완료!"); st.rerun()
                     if _dc2.button("취소", use_container_width=True, key="_delcancel_routings"):
-                        st.session_state[f"_del_routings"] = None; st.rerun()
+                        st.session_state["_del_routings"] = None; st.rerun()
 
-                # ── 수정 인라인 폼 ─────────────────────────────────────
-                if st.session_state.get(f"_edit_routings"):
-                    _edit_id_routings = st.session_state[f"_edit_routings"]
+                # ── 수정 인라인 폼 ──
+                if st.session_state.get("_edit_routings"):
+                    _edit_id_routings = st.session_state["_edit_routings"]
                     try:
                         _cx_e = get_db()
                         _edit_row_routings = dict(_cx_e.execute(
@@ -255,29 +258,28 @@ with tabs["routing"]:
                         if not _edit_row_routings:
                             st.warning("데이터를 불러올 수 없습니다.")
                         else:
-                            _skip_cols = {'id','created_at','updated_at'}
-                            _edit_fields_routings = [c for c in _edit_row_routings if c not in _skip_cols]
-                            _ncols = min(3, max(1, len(_edit_fields_routings)))
-                            _ecols = st.columns(_ncols)
-                            _new_vals_routings = {}
-                            for _i, _fc in enumerate(_edit_fields_routings):
+                            _skip = {'id','created_at','updated_at'}
+                            _flds = [c for c in _edit_row_routings if c not in _skip]
+                            _nc = min(3, max(1, len(_flds)))
+                            _ecols = st.columns(_nc)
+                            _nv = {}
+                            for _i, _fc in enumerate(_flds):
                                 _cv = _edit_row_routings[_fc]
-                                _ec = _ecols[_i % _ncols]
+                                _gc = _ecols[_i % _nc]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_routings[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_routings}_{_fc}_routings")
+                                    _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_routings")
                                 else:
-                                    _new_vals_routings[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_routings}_{_fc}_routings")
+                                    _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_routings")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_routings"):
-                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_routings])
-                                _set_params = list(_new_vals_routings.values()) + [_edit_id_routings]
+                                _set_sql = ", ".join([f"{c}=?" for c in _nv])
                                 _cx_s = get_db()
-                                _cx_s.execute(f"UPDATE routings SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.execute(f"UPDATE routings SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_routings])
                                 _cx_s.commit(); _cx_s.close()
-                                st.session_state[f"_edit_routings"] = None
+                                st.session_state["_edit_routings"] = None
                                 st.success("✅ 수정 저장 완료!"); st.rerun()
                             if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_routings"):
-                                st.session_state[f"_edit_routings"] = None; st.rerun()
+                                st.session_state["_edit_routings"] = None; st.rerun()
 
 
 # ══ 작업장 ══════════════════════════════════════════
@@ -301,17 +303,21 @@ with tabs["wc"]:
         if df_wc.empty: st.info("없음")
         else: st.dataframe(df_wc,use_container_width=True,hide_index=True)
 
-        # ── 행 수정/삭제 버튼 (작업장) ──────────────────────────
-        if not df_wc.empty if hasattr(df_wc, 'empty') else df_wc is not None:
+        # ── 행 수정/삭제 (작업장) ──────────────────────────────
+        try:
+            _has_data_work_centers = (not df_wc.empty) if hasattr(df_wc, 'empty') else bool(df_wc is not None)
+        except Exception:
+            _has_data_work_centers = False
+        if _has_data_work_centers:
             _row_opts_work_centers = {}
             try:
                 _cx_opt = get_db()
                 _opt_rs = [dict(r) for r in _cx_opt.execute(
-                    "SELECT id, 작업장명 FROM work_centers ORDER BY id DESC LIMIT 300"
+                    "SELECT id, wc_name FROM work_centers ORDER BY id DESC LIMIT 300"
                 ).fetchall()]
                 _cx_opt.close()
                 for _r in _opt_rs:
-                    _k = f"{_r['id']} | {_r.get('작업장명','')}"
+                    _k = f"{_r['id']} | {_r.get('wc_name','')}"
                     _row_opts_work_centers[_k] = _r['id']
             except Exception:
                 pass
@@ -323,32 +329,30 @@ with tabs["wc"]:
                     key="_rbsel_work_centers", label_visibility="collapsed"
                 )
                 _rb_id_work_centers = _row_opts_work_centers[_rb_sel_work_centers]
-
                 if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_work_centers"):
-                    st.session_state[f"_edit_work_centers"] = _rb_id_work_centers
-                    st.session_state[f"_del_work_centers"]  = None
-
+                    st.session_state["_edit_work_centers"] = _rb_id_work_centers
+                    st.session_state["_del_work_centers"]  = None
                 if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_work_centers"):
-                    st.session_state[f"_del_work_centers"]  = _rb_id_work_centers
-                    st.session_state[f"_edit_work_centers"] = None
+                    st.session_state["_del_work_centers"]  = _rb_id_work_centers
+                    st.session_state["_edit_work_centers"] = None
 
-            # ── 삭제 확인 ──────────────────────────────────────────
-            if st.session_state.get(f"_del_work_centers"):
-                _del_id_work_centers = st.session_state[f"_del_work_centers"]
-                st.warning(f"⚠️ ID **{_del_id_work_centers}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+            # ── 삭제 확인 ──
+            if st.session_state.get("_del_work_centers"):
+                _del_id_work_centers = st.session_state["_del_work_centers"]
+                st.warning(f"⚠️ ID **{_del_id_work_centers}** 항목을 삭제합니다. 복구 불가.")
                 _dc1, _dc2 = st.columns(2)
                 if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_work_centers"):
                     _cx_d = get_db()
                     _cx_d.execute("DELETE FROM work_centers WHERE id = ?", (_del_id_work_centers,))
                     _cx_d.commit(); _cx_d.close()
-                    st.session_state[f"_del_work_centers"] = None
+                    st.session_state["_del_work_centers"] = None
                     st.success("✅ 삭제 완료!"); st.rerun()
                 if _dc2.button("취소", use_container_width=True, key="_delcancel_work_centers"):
-                    st.session_state[f"_del_work_centers"] = None; st.rerun()
+                    st.session_state["_del_work_centers"] = None; st.rerun()
 
-            # ── 수정 인라인 폼 ─────────────────────────────────────
-            if st.session_state.get(f"_edit_work_centers"):
-                _edit_id_work_centers = st.session_state[f"_edit_work_centers"]
+            # ── 수정 인라인 폼 ──
+            if st.session_state.get("_edit_work_centers"):
+                _edit_id_work_centers = st.session_state["_edit_work_centers"]
                 try:
                     _cx_e = get_db()
                     _edit_row_work_centers = dict(_cx_e.execute(
@@ -361,29 +365,28 @@ with tabs["wc"]:
                     if not _edit_row_work_centers:
                         st.warning("데이터를 불러올 수 없습니다.")
                     else:
-                        _skip_cols = {'id','created_at','updated_at'}
-                        _edit_fields_work_centers = [c for c in _edit_row_work_centers if c not in _skip_cols]
-                        _ncols = min(3, max(1, len(_edit_fields_work_centers)))
-                        _ecols = st.columns(_ncols)
-                        _new_vals_work_centers = {}
-                        for _i, _fc in enumerate(_edit_fields_work_centers):
+                        _skip = {'id','created_at','updated_at'}
+                        _flds = [c for c in _edit_row_work_centers if c not in _skip]
+                        _nc = min(3, max(1, len(_flds)))
+                        _ecols = st.columns(_nc)
+                        _nv = {}
+                        for _i, _fc in enumerate(_flds):
                             _cv = _edit_row_work_centers[_fc]
-                            _ec = _ecols[_i % _ncols]
+                            _gc = _ecols[_i % _nc]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_work_centers[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_work_centers}_{_fc}_work_centers")
+                                _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_work_centers")
                             else:
-                                _new_vals_work_centers[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_work_centers}_{_fc}_work_centers")
+                                _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_work_centers")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_work_centers"):
-                            _set_sql = ", ".join([f"{c}=?" for c in _new_vals_work_centers])
-                            _set_params = list(_new_vals_work_centers.values()) + [_edit_id_work_centers]
+                            _set_sql = ", ".join([f"{c}=?" for c in _nv])
                             _cx_s = get_db()
-                            _cx_s.execute(f"UPDATE work_centers SET {_set_sql} WHERE id=?", _set_params)
+                            _cx_s.execute(f"UPDATE work_centers SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_work_centers])
                             _cx_s.commit(); _cx_s.close()
-                            st.session_state[f"_edit_work_centers"] = None
+                            st.session_state["_edit_work_centers"] = None
                             st.success("✅ 수정 저장 완료!"); st.rerun()
                         if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_work_centers"):
-                            st.session_state[f"_edit_work_centers"] = None; st.rerun()
+                            st.session_state["_edit_work_centers"] = None; st.rerun()
 
 
 # ══ 생산계획 ══════════════════════════════════════════
@@ -409,17 +412,21 @@ with tabs["plan"]:
             pf2=st.multiselect("상태 필터",df_pp['상태'].unique().tolist(),default=df_pp['상태'].unique().tolist())
             st.dataframe(df_pp[df_pp['상태'].isin(pf2)],use_container_width=True,hide_index=True)
 
-            # ── 행 수정/삭제 버튼 (생산계획) ──────────────────────────
-            if not df_pp.empty if hasattr(df_pp, 'empty') else df_pp is not None:
+            # ── 행 수정/삭제 (생산계획) ──────────────────────────────
+            try:
+                _has_data_production_plans = (not df_pp.empty) if hasattr(df_pp, 'empty') else bool(df_pp is not None)
+            except Exception:
+                _has_data_production_plans = False
+            if _has_data_production_plans:
                 _row_opts_production_plans = {}
                 try:
                     _cx_opt = get_db()
                     _opt_rs = [dict(r) for r in _cx_opt.execute(
-                        "SELECT id, 제품명 FROM production_plans ORDER BY id DESC LIMIT 300"
+                        "SELECT id, product_name FROM production_plans ORDER BY id DESC LIMIT 300"
                     ).fetchall()]
                     _cx_opt.close()
                     for _r in _opt_rs:
-                        _k = f"{_r['id']} | {_r.get('제품명','')}"
+                        _k = f"{_r['id']} | {_r.get('product_name','')}"
                         _row_opts_production_plans[_k] = _r['id']
                 except Exception:
                     pass
@@ -431,32 +438,30 @@ with tabs["plan"]:
                         key="_rbsel_production_plans", label_visibility="collapsed"
                     )
                     _rb_id_production_plans = _row_opts_production_plans[_rb_sel_production_plans]
-
                     if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_production_plans"):
-                        st.session_state[f"_edit_production_plans"] = _rb_id_production_plans
-                        st.session_state[f"_del_production_plans"]  = None
-
+                        st.session_state["_edit_production_plans"] = _rb_id_production_plans
+                        st.session_state["_del_production_plans"]  = None
                     if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_production_plans"):
-                        st.session_state[f"_del_production_plans"]  = _rb_id_production_plans
-                        st.session_state[f"_edit_production_plans"] = None
+                        st.session_state["_del_production_plans"]  = _rb_id_production_plans
+                        st.session_state["_edit_production_plans"] = None
 
-                # ── 삭제 확인 ──────────────────────────────────────────
-                if st.session_state.get(f"_del_production_plans"):
-                    _del_id_production_plans = st.session_state[f"_del_production_plans"]
-                    st.warning(f"⚠️ ID **{_del_id_production_plans}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                # ── 삭제 확인 ──
+                if st.session_state.get("_del_production_plans"):
+                    _del_id_production_plans = st.session_state["_del_production_plans"]
+                    st.warning(f"⚠️ ID **{_del_id_production_plans}** 항목을 삭제합니다. 복구 불가.")
                     _dc1, _dc2 = st.columns(2)
                     if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_production_plans"):
                         _cx_d = get_db()
                         _cx_d.execute("DELETE FROM production_plans WHERE id = ?", (_del_id_production_plans,))
                         _cx_d.commit(); _cx_d.close()
-                        st.session_state[f"_del_production_plans"] = None
+                        st.session_state["_del_production_plans"] = None
                         st.success("✅ 삭제 완료!"); st.rerun()
                     if _dc2.button("취소", use_container_width=True, key="_delcancel_production_plans"):
-                        st.session_state[f"_del_production_plans"] = None; st.rerun()
+                        st.session_state["_del_production_plans"] = None; st.rerun()
 
-                # ── 수정 인라인 폼 ─────────────────────────────────────
-                if st.session_state.get(f"_edit_production_plans"):
-                    _edit_id_production_plans = st.session_state[f"_edit_production_plans"]
+                # ── 수정 인라인 폼 ──
+                if st.session_state.get("_edit_production_plans"):
+                    _edit_id_production_plans = st.session_state["_edit_production_plans"]
                     try:
                         _cx_e = get_db()
                         _edit_row_production_plans = dict(_cx_e.execute(
@@ -469,29 +474,28 @@ with tabs["plan"]:
                         if not _edit_row_production_plans:
                             st.warning("데이터를 불러올 수 없습니다.")
                         else:
-                            _skip_cols = {'id','created_at','updated_at'}
-                            _edit_fields_production_plans = [c for c in _edit_row_production_plans if c not in _skip_cols]
-                            _ncols = min(3, max(1, len(_edit_fields_production_plans)))
-                            _ecols = st.columns(_ncols)
-                            _new_vals_production_plans = {}
-                            for _i, _fc in enumerate(_edit_fields_production_plans):
+                            _skip = {'id','created_at','updated_at'}
+                            _flds = [c for c in _edit_row_production_plans if c not in _skip]
+                            _nc = min(3, max(1, len(_flds)))
+                            _ecols = st.columns(_nc)
+                            _nv = {}
+                            for _i, _fc in enumerate(_flds):
                                 _cv = _edit_row_production_plans[_fc]
-                                _ec = _ecols[_i % _ncols]
+                                _gc = _ecols[_i % _nc]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_production_plans[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_production_plans}_{_fc}_production_plans")
+                                    _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_production_plans")
                                 else:
-                                    _new_vals_production_plans[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_production_plans}_{_fc}_production_plans")
+                                    _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_production_plans")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_production_plans"):
-                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_production_plans])
-                                _set_params = list(_new_vals_production_plans.values()) + [_edit_id_production_plans]
+                                _set_sql = ", ".join([f"{c}=?" for c in _nv])
                                 _cx_s = get_db()
-                                _cx_s.execute(f"UPDATE production_plans SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.execute(f"UPDATE production_plans SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_production_plans])
                                 _cx_s.commit(); _cx_s.close()
-                                st.session_state[f"_edit_production_plans"] = None
+                                st.session_state["_edit_production_plans"] = None
                                 st.success("✅ 수정 저장 완료!"); st.rerun()
                             if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_production_plans"):
-                                st.session_state[f"_edit_production_plans"] = None; st.rerun()
+                                st.session_state["_edit_production_plans"] = None; st.rerun()
 
 
 # ══ 작업지시 WO ══════════════════════════════════════════
@@ -521,17 +525,21 @@ with tabs["wo"]:
         if df_wo.empty: st.info("없음")
         else: st.dataframe(df_wo,use_container_width=True,hide_index=True)
 
-        # ── 행 수정/삭제 버튼 (작업지시(WO)) ──────────────────────────
-        if not df_wo.empty if hasattr(df_wo, 'empty') else df_wo is not None:
+        # ── 행 수정/삭제 (작업지시(WO)) ──────────────────────────────
+        try:
+            _has_data_work_orders = (not df_wo.empty) if hasattr(df_wo, 'empty') else bool(df_wo is not None)
+        except Exception:
+            _has_data_work_orders = False
+        if _has_data_work_orders:
             _row_opts_work_orders = {}
             try:
                 _cx_opt = get_db()
                 _opt_rs = [dict(r) for r in _cx_opt.execute(
-                    "SELECT id, 제품명 FROM work_orders ORDER BY id DESC LIMIT 300"
+                    "SELECT id, product_name FROM work_orders ORDER BY id DESC LIMIT 300"
                 ).fetchall()]
                 _cx_opt.close()
                 for _r in _opt_rs:
-                    _k = f"{_r['id']} | {_r.get('제품명','')}"
+                    _k = f"{_r['id']} | {_r.get('product_name','')}"
                     _row_opts_work_orders[_k] = _r['id']
             except Exception:
                 pass
@@ -543,32 +551,30 @@ with tabs["wo"]:
                     key="_rbsel_work_orders", label_visibility="collapsed"
                 )
                 _rb_id_work_orders = _row_opts_work_orders[_rb_sel_work_orders]
-
                 if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_work_orders"):
-                    st.session_state[f"_edit_work_orders"] = _rb_id_work_orders
-                    st.session_state[f"_del_work_orders"]  = None
-
+                    st.session_state["_edit_work_orders"] = _rb_id_work_orders
+                    st.session_state["_del_work_orders"]  = None
                 if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_work_orders"):
-                    st.session_state[f"_del_work_orders"]  = _rb_id_work_orders
-                    st.session_state[f"_edit_work_orders"] = None
+                    st.session_state["_del_work_orders"]  = _rb_id_work_orders
+                    st.session_state["_edit_work_orders"] = None
 
-            # ── 삭제 확인 ──────────────────────────────────────────
-            if st.session_state.get(f"_del_work_orders"):
-                _del_id_work_orders = st.session_state[f"_del_work_orders"]
-                st.warning(f"⚠️ ID **{_del_id_work_orders}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+            # ── 삭제 확인 ──
+            if st.session_state.get("_del_work_orders"):
+                _del_id_work_orders = st.session_state["_del_work_orders"]
+                st.warning(f"⚠️ ID **{_del_id_work_orders}** 항목을 삭제합니다. 복구 불가.")
                 _dc1, _dc2 = st.columns(2)
                 if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_work_orders"):
                     _cx_d = get_db()
                     _cx_d.execute("DELETE FROM work_orders WHERE id = ?", (_del_id_work_orders,))
                     _cx_d.commit(); _cx_d.close()
-                    st.session_state[f"_del_work_orders"] = None
+                    st.session_state["_del_work_orders"] = None
                     st.success("✅ 삭제 완료!"); st.rerun()
                 if _dc2.button("취소", use_container_width=True, key="_delcancel_work_orders"):
-                    st.session_state[f"_del_work_orders"] = None; st.rerun()
+                    st.session_state["_del_work_orders"] = None; st.rerun()
 
-            # ── 수정 인라인 폼 ─────────────────────────────────────
-            if st.session_state.get(f"_edit_work_orders"):
-                _edit_id_work_orders = st.session_state[f"_edit_work_orders"]
+            # ── 수정 인라인 폼 ──
+            if st.session_state.get("_edit_work_orders"):
+                _edit_id_work_orders = st.session_state["_edit_work_orders"]
                 try:
                     _cx_e = get_db()
                     _edit_row_work_orders = dict(_cx_e.execute(
@@ -581,29 +587,28 @@ with tabs["wo"]:
                     if not _edit_row_work_orders:
                         st.warning("데이터를 불러올 수 없습니다.")
                     else:
-                        _skip_cols = {'id','created_at','updated_at'}
-                        _edit_fields_work_orders = [c for c in _edit_row_work_orders if c not in _skip_cols]
-                        _ncols = min(3, max(1, len(_edit_fields_work_orders)))
-                        _ecols = st.columns(_ncols)
-                        _new_vals_work_orders = {}
-                        for _i, _fc in enumerate(_edit_fields_work_orders):
+                        _skip = {'id','created_at','updated_at'}
+                        _flds = [c for c in _edit_row_work_orders if c not in _skip]
+                        _nc = min(3, max(1, len(_flds)))
+                        _ecols = st.columns(_nc)
+                        _nv = {}
+                        for _i, _fc in enumerate(_flds):
                             _cv = _edit_row_work_orders[_fc]
-                            _ec = _ecols[_i % _ncols]
+                            _gc = _ecols[_i % _nc]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_work_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_work_orders}_{_fc}_work_orders")
+                                _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_work_orders")
                             else:
-                                _new_vals_work_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_work_orders}_{_fc}_work_orders")
+                                _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_work_orders")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_work_orders"):
-                            _set_sql = ", ".join([f"{c}=?" for c in _new_vals_work_orders])
-                            _set_params = list(_new_vals_work_orders.values()) + [_edit_id_work_orders]
+                            _set_sql = ", ".join([f"{c}=?" for c in _nv])
                             _cx_s = get_db()
-                            _cx_s.execute(f"UPDATE work_orders SET {_set_sql} WHERE id=?", _set_params)
+                            _cx_s.execute(f"UPDATE work_orders SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_work_orders])
                             _cx_s.commit(); _cx_s.close()
-                            st.session_state[f"_edit_work_orders"] = None
+                            st.session_state["_edit_work_orders"] = None
                             st.success("✅ 수정 저장 완료!"); st.rerun()
                         if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_work_orders"):
-                            st.session_state[f"_edit_work_orders"] = None; st.rerun()
+                            st.session_state["_edit_work_orders"] = None; st.rerun()
 
 
 # ══ 생산실적 ══════════════════════════════════════════
@@ -694,17 +699,21 @@ with tabs["mrp_req"]:
         if df_mr.empty: st.info("없음")
         else: st.dataframe(df_mr,use_container_width=True,hide_index=True)
 
-        # ── 행 수정/삭제 버튼 (MRP발주요청) ──────────────────────────
-        if not df_mr.empty if hasattr(df_mr, 'empty') else df_mr is not None:
+        # ── 행 수정/삭제 (MRP발주요청) ──────────────────────────────
+        try:
+            _has_data_mrp_requests = (not df_mr.empty) if hasattr(df_mr, 'empty') else bool(df_mr is not None)
+        except Exception:
+            _has_data_mrp_requests = False
+        if _has_data_mrp_requests:
             _row_opts_mrp_requests = {}
             try:
                 _cx_opt = get_db()
                 _opt_rs = [dict(r) for r in _cx_opt.execute(
-                    "SELECT id, 품목명 FROM mrp_requests ORDER BY id DESC LIMIT 300"
+                    "SELECT id, material_name FROM mrp_requests ORDER BY id DESC LIMIT 300"
                 ).fetchall()]
                 _cx_opt.close()
                 for _r in _opt_rs:
-                    _k = f"{_r['id']} | {_r.get('품목명','')}"
+                    _k = f"{_r['id']} | {_r.get('material_name','')}"
                     _row_opts_mrp_requests[_k] = _r['id']
             except Exception:
                 pass
@@ -716,32 +725,30 @@ with tabs["mrp_req"]:
                     key="_rbsel_mrp_requests", label_visibility="collapsed"
                 )
                 _rb_id_mrp_requests = _row_opts_mrp_requests[_rb_sel_mrp_requests]
-
                 if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_mrp_requests"):
-                    st.session_state[f"_edit_mrp_requests"] = _rb_id_mrp_requests
-                    st.session_state[f"_del_mrp_requests"]  = None
-
+                    st.session_state["_edit_mrp_requests"] = _rb_id_mrp_requests
+                    st.session_state["_del_mrp_requests"]  = None
                 if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_mrp_requests"):
-                    st.session_state[f"_del_mrp_requests"]  = _rb_id_mrp_requests
-                    st.session_state[f"_edit_mrp_requests"] = None
+                    st.session_state["_del_mrp_requests"]  = _rb_id_mrp_requests
+                    st.session_state["_edit_mrp_requests"] = None
 
-            # ── 삭제 확인 ──────────────────────────────────────────
-            if st.session_state.get(f"_del_mrp_requests"):
-                _del_id_mrp_requests = st.session_state[f"_del_mrp_requests"]
-                st.warning(f"⚠️ ID **{_del_id_mrp_requests}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+            # ── 삭제 확인 ──
+            if st.session_state.get("_del_mrp_requests"):
+                _del_id_mrp_requests = st.session_state["_del_mrp_requests"]
+                st.warning(f"⚠️ ID **{_del_id_mrp_requests}** 항목을 삭제합니다. 복구 불가.")
                 _dc1, _dc2 = st.columns(2)
                 if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_mrp_requests"):
                     _cx_d = get_db()
                     _cx_d.execute("DELETE FROM mrp_requests WHERE id = ?", (_del_id_mrp_requests,))
                     _cx_d.commit(); _cx_d.close()
-                    st.session_state[f"_del_mrp_requests"] = None
+                    st.session_state["_del_mrp_requests"] = None
                     st.success("✅ 삭제 완료!"); st.rerun()
                 if _dc2.button("취소", use_container_width=True, key="_delcancel_mrp_requests"):
-                    st.session_state[f"_del_mrp_requests"] = None; st.rerun()
+                    st.session_state["_del_mrp_requests"] = None; st.rerun()
 
-            # ── 수정 인라인 폼 ─────────────────────────────────────
-            if st.session_state.get(f"_edit_mrp_requests"):
-                _edit_id_mrp_requests = st.session_state[f"_edit_mrp_requests"]
+            # ── 수정 인라인 폼 ──
+            if st.session_state.get("_edit_mrp_requests"):
+                _edit_id_mrp_requests = st.session_state["_edit_mrp_requests"]
                 try:
                     _cx_e = get_db()
                     _edit_row_mrp_requests = dict(_cx_e.execute(
@@ -754,29 +761,28 @@ with tabs["mrp_req"]:
                     if not _edit_row_mrp_requests:
                         st.warning("데이터를 불러올 수 없습니다.")
                     else:
-                        _skip_cols = {'id','created_at','updated_at'}
-                        _edit_fields_mrp_requests = [c for c in _edit_row_mrp_requests if c not in _skip_cols]
-                        _ncols = min(3, max(1, len(_edit_fields_mrp_requests)))
-                        _ecols = st.columns(_ncols)
-                        _new_vals_mrp_requests = {}
-                        for _i, _fc in enumerate(_edit_fields_mrp_requests):
+                        _skip = {'id','created_at','updated_at'}
+                        _flds = [c for c in _edit_row_mrp_requests if c not in _skip]
+                        _nc = min(3, max(1, len(_flds)))
+                        _ecols = st.columns(_nc)
+                        _nv = {}
+                        for _i, _fc in enumerate(_flds):
                             _cv = _edit_row_mrp_requests[_fc]
-                            _ec = _ecols[_i % _ncols]
+                            _gc = _ecols[_i % _nc]
                             if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                _new_vals_mrp_requests[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_mrp_requests}_{_fc}_mrp_requests")
+                                _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_mrp_requests")
                             else:
-                                _new_vals_mrp_requests[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_mrp_requests}_{_fc}_mrp_requests")
+                                _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_mrp_requests")
                         _s1, _s2 = st.columns(2)
                         if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_mrp_requests"):
-                            _set_sql = ", ".join([f"{c}=?" for c in _new_vals_mrp_requests])
-                            _set_params = list(_new_vals_mrp_requests.values()) + [_edit_id_mrp_requests]
+                            _set_sql = ", ".join([f"{c}=?" for c in _nv])
                             _cx_s = get_db()
-                            _cx_s.execute(f"UPDATE mrp_requests SET {_set_sql} WHERE id=?", _set_params)
+                            _cx_s.execute(f"UPDATE mrp_requests SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_mrp_requests])
                             _cx_s.commit(); _cx_s.close()
-                            st.session_state[f"_edit_mrp_requests"] = None
+                            st.session_state["_edit_mrp_requests"] = None
                             st.success("✅ 수정 저장 완료!"); st.rerun()
                         if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_mrp_requests"):
-                            st.session_state[f"_edit_mrp_requests"] = None; st.rerun()
+                            st.session_state["_edit_mrp_requests"] = None; st.rerun()
 
 
 # ══ 생산 추이 BI ══════════════════════════════════════════
@@ -811,91 +817,6 @@ with tabs["bi_wc"]:
             with col_l: st.plotly_chart(px.bar(df_wc2,x='작업장',y='WO건수',color='달성률',color_continuous_scale='RdYlGn',range_color=[0,100],title="작업장별 WO건수·달성률").update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0),showlegend=False),use_container_width=True)
             with col_r: st.plotly_chart(px.bar(df_wc2,x='작업장',y=['계획수량','실적수량'],title="작업장별 계획·실적",barmode='group').update_layout(height=280,margin=dict(l=0,r=0,t=40,b=0)),use_container_width=True)
             st.dataframe(df_wc2,use_container_width=True,hide_index=True)
-
-            # ── 행 수정/삭제 버튼 (inventory) ──────────────────────────
-            if not df_wc2.empty if hasattr(df_wc2, 'empty') else df_wc2 is not None:
-                _row_opts_inventory = {}
-                try:
-                    _cx_opt = get_db()
-                    _opt_rs = [dict(r) for r in _cx_opt.execute(
-                        "SELECT id, * FROM inventory ORDER BY id DESC LIMIT 300"
-                    ).fetchall()]
-                    _cx_opt.close()
-                    for _r in _opt_rs:
-                        _k = f"{_r['id']} | {_r.get('item_name','')}"
-                        _row_opts_inventory[_k] = _r['id']
-                except Exception:
-                    pass
-            
-                if _row_opts_inventory:
-                    _rb_sel_col, _rb_ed_col, _rb_del_col = st.columns([4, 1, 1])
-                    _rb_sel_inventory = _rb_sel_col.selectbox(
-                        "행 선택", list(_row_opts_inventory.keys()),
-                        key="_rbsel_inventory", label_visibility="collapsed"
-                    )
-                    _rb_id_inventory = _row_opts_inventory[_rb_sel_inventory]
-            
-                    if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_inventory"):
-                        st.session_state[f"_edit_inventory"] = _rb_id_inventory
-                        st.session_state[f"_del_inventory"]  = None
-            
-                    if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_inventory"):
-                        st.session_state[f"_del_inventory"]  = _rb_id_inventory
-                        st.session_state[f"_edit_inventory"] = None
-            
-                # ── 삭제 확인 ──────────────────────────────────────────
-                if st.session_state.get(f"_del_inventory"):
-                    _del_id_inventory = st.session_state[f"_del_inventory"]
-                    st.warning(f"⚠️ ID **{_del_id_inventory}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
-                    _dc1, _dc2 = st.columns(2)
-                    if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_inventory"):
-                        _cx_d = get_db()
-                        _cx_d.execute("DELETE FROM inventory WHERE id = ?", (_del_id_inventory,))
-                        _cx_d.commit(); _cx_d.close()
-                        st.session_state[f"_del_inventory"] = None
-                        st.success("✅ 삭제 완료!"); st.rerun()
-                    if _dc2.button("취소", use_container_width=True, key="_delcancel_inventory"):
-                        st.session_state[f"_del_inventory"] = None; st.rerun()
-            
-                # ── 수정 인라인 폼 ─────────────────────────────────────
-                if st.session_state.get(f"_edit_inventory"):
-                    _edit_id_inventory = st.session_state[f"_edit_inventory"]
-                    try:
-                        _cx_e = get_db()
-                        _edit_row_inventory = dict(_cx_e.execute(
-                            "SELECT * FROM inventory WHERE id=?", (_edit_id_inventory,)
-                        ).fetchone() or {})
-                        _cx_e.close()
-                    except Exception:
-                        _edit_row_inventory = {}
-                    with st.expander(f"✏️ 정보 수정 — ID {_edit_id_inventory}", expanded=True):
-                        if not _edit_row_inventory:
-                            st.warning("데이터를 불러올 수 없습니다.")
-                        else:
-                            _skip_cols = {'id','created_at','updated_at','ordered_at'}
-                            _edit_fields_inventory = [c for c in _edit_row_inventory if c not in _skip_cols]
-                            _ncols = min(3, max(1, len(_edit_fields_inventory)))
-                            _ecols = st.columns(_ncols)
-                            _new_vals_inventory = {}
-                            for _i, _fc in enumerate(_edit_fields_inventory):
-                                _cv = _edit_row_inventory[_fc]
-                                _ec = _ecols[_i % _ncols]
-                                if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_inventory[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_inventory}_{_fc}_inventory")
-                                else:
-                                    _new_vals_inventory[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_inventory}_{_fc}_inventory")
-                            _s1, _s2 = st.columns(2)
-                            if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_inventory"):
-                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_inventory])
-                                _set_params = list(_new_vals_inventory.values()) + [_edit_id_inventory]
-                                _cx_s = get_db()
-                                _cx_s.execute(f"UPDATE inventory SET {_set_sql} WHERE id=?", _set_params)
-                                _cx_s.commit(); _cx_s.close()
-                                st.session_state[f"_edit_inventory"] = None
-                                st.success("✅ 수정 저장 완료!"); st.rerun()
-                            if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_inventory"):
-                                st.session_state[f"_edit_inventory"] = None; st.rerun()
-
         conn.close()
 
 # ══ 품질·불량 BI ══════════════════════════════════════════
@@ -1254,17 +1175,21 @@ with tabs["subcon"]:
             def sc_c(r): return ['background-color:#fee2e2']*len(r) if r['납기잔여']<0 and r['상태'] not in ['입고완료','취소'] else ['']*len(r)
             st.dataframe(df_sc.style.apply(sc_c,axis=1), use_container_width=True, hide_index=True)
 
-            # ── 행 수정/삭제 버튼 (외주발주) ──────────────────────────
-            if not df_sc.empty if hasattr(df_sc, 'empty') else df_sc is not None:
+            # ── 행 수정/삭제 (외주발주) ──────────────────────────────
+            try:
+                _has_data_subcon_orders = (not df_sc.empty) if hasattr(df_sc, 'empty') else bool(df_sc is not None)
+            except Exception:
+                _has_data_subcon_orders = False
+            if _has_data_subcon_orders:
                 _row_opts_subcon_orders = {}
                 try:
                     _cx_opt = get_db()
                     _opt_rs = [dict(r) for r in _cx_opt.execute(
-                        "SELECT id, 품목명 FROM subcon_orders ORDER BY id DESC LIMIT 300"
+                        "SELECT id, product_name FROM subcon_orders ORDER BY id DESC LIMIT 300"
                     ).fetchall()]
                     _cx_opt.close()
                     for _r in _opt_rs:
-                        _k = f"{_r['id']} | {_r.get('품목명','')}"
+                        _k = f"{_r['id']} | {_r.get('product_name','')}"
                         _row_opts_subcon_orders[_k] = _r['id']
                 except Exception:
                     pass
@@ -1276,32 +1201,30 @@ with tabs["subcon"]:
                         key="_rbsel_subcon_orders", label_visibility="collapsed"
                     )
                     _rb_id_subcon_orders = _row_opts_subcon_orders[_rb_sel_subcon_orders]
-
                     if _rb_ed_col.button("✏️ 수정", use_container_width=True, key="_rbed_subcon_orders"):
-                        st.session_state[f"_edit_subcon_orders"] = _rb_id_subcon_orders
-                        st.session_state[f"_del_subcon_orders"]  = None
-
+                        st.session_state["_edit_subcon_orders"] = _rb_id_subcon_orders
+                        st.session_state["_del_subcon_orders"]  = None
                     if _rb_del_col.button("🗑️ 삭제", use_container_width=True, key="_rbdel_subcon_orders"):
-                        st.session_state[f"_del_subcon_orders"]  = _rb_id_subcon_orders
-                        st.session_state[f"_edit_subcon_orders"] = None
+                        st.session_state["_del_subcon_orders"]  = _rb_id_subcon_orders
+                        st.session_state["_edit_subcon_orders"] = None
 
-                # ── 삭제 확인 ──────────────────────────────────────────
-                if st.session_state.get(f"_del_subcon_orders"):
-                    _del_id_subcon_orders = st.session_state[f"_del_subcon_orders"]
-                    st.warning(f"⚠️ ID **{_del_id_subcon_orders}** 항목을 삭제합니다. 이 작업은 되돌릴 수 없습니다.")
+                # ── 삭제 확인 ──
+                if st.session_state.get("_del_subcon_orders"):
+                    _del_id_subcon_orders = st.session_state["_del_subcon_orders"]
+                    st.warning(f"⚠️ ID **{_del_id_subcon_orders}** 항목을 삭제합니다. 복구 불가.")
                     _dc1, _dc2 = st.columns(2)
                     if _dc1.button("🗑️ 삭제 확인", type="primary", use_container_width=True, key="_delok_subcon_orders"):
                         _cx_d = get_db()
                         _cx_d.execute("DELETE FROM subcon_orders WHERE id = ?", (_del_id_subcon_orders,))
                         _cx_d.commit(); _cx_d.close()
-                        st.session_state[f"_del_subcon_orders"] = None
+                        st.session_state["_del_subcon_orders"] = None
                         st.success("✅ 삭제 완료!"); st.rerun()
                     if _dc2.button("취소", use_container_width=True, key="_delcancel_subcon_orders"):
-                        st.session_state[f"_del_subcon_orders"] = None; st.rerun()
+                        st.session_state["_del_subcon_orders"] = None; st.rerun()
 
-                # ── 수정 인라인 폼 ─────────────────────────────────────
-                if st.session_state.get(f"_edit_subcon_orders"):
-                    _edit_id_subcon_orders = st.session_state[f"_edit_subcon_orders"]
+                # ── 수정 인라인 폼 ──
+                if st.session_state.get("_edit_subcon_orders"):
+                    _edit_id_subcon_orders = st.session_state["_edit_subcon_orders"]
                     try:
                         _cx_e = get_db()
                         _edit_row_subcon_orders = dict(_cx_e.execute(
@@ -1314,29 +1237,28 @@ with tabs["subcon"]:
                         if not _edit_row_subcon_orders:
                             st.warning("데이터를 불러올 수 없습니다.")
                         else:
-                            _skip_cols = {'id','created_at','updated_at'}
-                            _edit_fields_subcon_orders = [c for c in _edit_row_subcon_orders if c not in _skip_cols]
-                            _ncols = min(3, max(1, len(_edit_fields_subcon_orders)))
-                            _ecols = st.columns(_ncols)
-                            _new_vals_subcon_orders = {}
-                            for _i, _fc in enumerate(_edit_fields_subcon_orders):
+                            _skip = {'id','created_at','updated_at'}
+                            _flds = [c for c in _edit_row_subcon_orders if c not in _skip]
+                            _nc = min(3, max(1, len(_flds)))
+                            _ecols = st.columns(_nc)
+                            _nv = {}
+                            for _i, _fc in enumerate(_flds):
                                 _cv = _edit_row_subcon_orders[_fc]
-                                _ec = _ecols[_i % _ncols]
+                                _gc = _ecols[_i % _nc]
                                 if isinstance(_cv, (int, float)) and not isinstance(_cv, bool):
-                                    _new_vals_subcon_orders[_fc] = _ec.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_edit_id_subcon_orders}_{_fc}_subcon_orders")
+                                    _nv[_fc] = _gc.number_input(_fc, value=float(_cv or 0), key=f"_ef_{_fc}_subcon_orders")
                                 else:
-                                    _new_vals_subcon_orders[_fc] = _ec.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_edit_id_subcon_orders}_{_fc}_subcon_orders")
+                                    _nv[_fc] = _gc.text_input(_fc, value=str(_cv or ""), key=f"_ef_{_fc}_subcon_orders")
                             _s1, _s2 = st.columns(2)
                             if _s1.button("💾 저장", type="primary", use_container_width=True, key="_edsave_subcon_orders"):
-                                _set_sql = ", ".join([f"{c}=?" for c in _new_vals_subcon_orders])
-                                _set_params = list(_new_vals_subcon_orders.values()) + [_edit_id_subcon_orders]
+                                _set_sql = ", ".join([f"{c}=?" for c in _nv])
                                 _cx_s = get_db()
-                                _cx_s.execute(f"UPDATE subcon_orders SET {_set_sql} WHERE id=?", _set_params)
+                                _cx_s.execute(f"UPDATE subcon_orders SET {_set_sql} WHERE id=?", list(_nv.values())+[_edit_id_subcon_orders])
                                 _cx_s.commit(); _cx_s.close()
-                                st.session_state[f"_edit_subcon_orders"] = None
+                                st.session_state["_edit_subcon_orders"] = None
                                 st.success("✅ 수정 저장 완료!"); st.rerun()
                             if _s2.button("✖ 취소", use_container_width=True, key="_edcancel_subcon_orders"):
-                                st.session_state[f"_edit_subcon_orders"] = None; st.rerun()
+                                st.session_state["_edit_subcon_orders"] = None; st.rerun()
 
             c1,c2,c3=st.columns(3)
             c1.metric("진행중",len(df_sc[~df_sc['상태'].isin(['입고완료','취소'])]))

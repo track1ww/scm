@@ -5,6 +5,14 @@ pip install pymysql bcrypt
 import os, re
 import pymysql, pymysql.cursors
 from datetime import datetime
+from decimal import Decimal
+
+def _conv(v):
+    """decimal.Decimal → float 자동 변환 (MySQL DECIMAL 컬럼 대응)"""
+    return float(v) if isinstance(v, Decimal) else v
+
+def _conv_dict(d):
+    return {k: _conv(v) for k, v in d.items()}
 
 # ── 접속 설정 ─────────────────────────────────────────
 DB_CONFIG = dict(
@@ -16,6 +24,10 @@ DB_CONFIG = dict(
     charset  = "utf8mb4",
     cursorclass = pymysql.cursors.DictCursor,
     autocommit  = False,
+    # DECIMAL 컬럼을 float으로 자동 변환 (decimal.Decimal 연산 오류 방지)
+    conv = {**pymysql.converters.conversions,
+            0:   float,   # MYSQL_TYPE_DECIMAL
+            246: float},  # MYSQL_TYPE_NEWDECIMAL → float 변환 (decimal.Decimal 방지)
 )
 
 # ── SQLite → MySQL 완전 변환 ──────────────────────────
@@ -43,7 +55,9 @@ def _fix_sql(sql: str) -> str:
 
 # ── 래퍼 클래스 ───────────────────────────────────────
 class _Row:
-    def __init__(self, d): self._d = d; self._v = list(d.values())
+    def __init__(self, d):
+        self._d = _conv_dict(d)   # ← Decimal → float 자동 변환
+        self._v = list(self._d.values())
     def __getitem__(self, k): return self._v[k] if isinstance(k,int) else self._d[k]
     def __iter__(self): return iter(self._v)
     def __len__(self): return len(self._v)
