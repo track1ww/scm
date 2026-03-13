@@ -1411,443 +1411,441 @@ with main_tab3:
     if len(_history) < 3:
         st.caption("⚠️ 최소 3개월 이상의 수요 데이터가 필요합니다.")
 
-    if not _run_btn:
-        st.stop()
+    if _run_btn:
+        # ════════════════════════════════════════════════════════════
+        #  피처 엔지니어링 + LightGBM 학습
+        # ════════════════════════════════════════════════════════════
+        import numpy as _np
+        import pandas as _pd
+        import datetime as _dt
 
-    # ════════════════════════════════════════════════════════════
-    #  피처 엔지니어링 + LightGBM 학습
-    # ════════════════════════════════════════════════════════════
-    import numpy as _np
-    import pandas as _pd
-    import datetime as _dt
+        st.markdown("---")
+        st.markdown("### 📊 예측 결과")
+        _prog = st.progress(0, text="데이터 전처리 중...")
 
-    st.markdown("---")
-    st.markdown("### 📊 예측 결과")
-    _prog = st.progress(0, text="데이터 전처리 중...")
+        # ── 1) 히스토리 DataFrame 생성 ──────────────────────────────
+        _df = _pd.DataFrame(_history, columns=["ym", "qty"])
+        _df["date"] = _pd.to_datetime(_df["ym"] + "-01")
+        _df["qty"]  = _df["qty"].astype(float)
+        _df = _df.sort_values("date").reset_index(drop=True)
+        _n  = len(_df)
 
-    # ── 1) 히스토리 DataFrame 생성 ──────────────────────────────
-    _df = _pd.DataFrame(_history, columns=["ym", "qty"])
-    _df["date"] = _pd.to_datetime(_df["ym"] + "-01")
-    _df["qty"]  = _df["qty"].astype(float)
-    _df = _df.sort_values("date").reset_index(drop=True)
-    _n  = len(_df)
+        # ── 2) 피처 엔지니어링 (README Part1 핵심 피처 이식) ────────
+        _prog.progress(15, text="피처 엔지니어링 중...")
 
-    # ── 2) 피처 엔지니어링 (README Part1 핵심 피처 이식) ────────
-    _prog.progress(15, text="피처 엔지니어링 중...")
+        # 날짜 피처
+        _df["month"]      = _df["date"].dt.month
+        _df["quarter"]    = _df["date"].dt.quarter
+        _df["is_yearend"] = (_df["month"].isin([11,12,1])).astype(int)   # 연말연시 수요 강조
+        _df["is_summer"]  = (_df["month"].isin([7,8])).astype(int)
+        _df["dow_weight"] = _DOW_W[_target_dow_idx]   # 발주 기준 요일 가중치 (단일값)
 
-    # 날짜 피처
-    _df["month"]      = _df["date"].dt.month
-    _df["quarter"]    = _df["date"].dt.quarter
-    _df["is_yearend"] = (_df["month"].isin([11,12,1])).astype(int)   # 연말연시 수요 강조
-    _df["is_summer"]  = (_df["month"].isin([7,8])).astype(int)
-    _df["dow_weight"] = _DOW_W[_target_dow_idx]   # 발주 기준 요일 가중치 (단일값)
+        # Lag 피처 (데이터 누수 방지: shift)
+        _df["lag_1"]  = _df["qty"].shift(1)
+        _df["lag_2"]  = _df["qty"].shift(2)
+        _df["lag_3"]  = _df["qty"].shift(3)
 
-    # Lag 피처 (데이터 누수 방지: shift)
-    _df["lag_1"]  = _df["qty"].shift(1)
-    _df["lag_2"]  = _df["qty"].shift(2)
-    _df["lag_3"]  = _df["qty"].shift(3)
+        # Rolling 평균
+        _df["roll_mean_2"] = _df["qty"].shift(1).rolling(2, min_periods=1).mean()
+        _df["roll_mean_3"] = _df["qty"].shift(1).rolling(3, min_periods=1).mean()
+        _df["roll_std_3"]  = _df["qty"].shift(1).rolling(3, min_periods=1).std().fillna(0)
 
-    # Rolling 평균
-    _df["roll_mean_2"] = _df["qty"].shift(1).rolling(2, min_periods=1).mean()
-    _df["roll_mean_3"] = _df["qty"].shift(1).rolling(3, min_periods=1).mean()
-    _df["roll_std_3"]  = _df["qty"].shift(1).rolling(3, min_periods=1).std().fillna(0)
+        # 단기 추세 (최근 2개월 평균 / 이전 2개월 평균)
+        _roll2      = _df["qty"].shift(1).rolling(2, min_periods=1).mean()
+        _roll2_prev = _df["qty"].shift(3).rolling(2, min_periods=1).mean()
+        _df["trend"] = (_roll2 / (_roll2_prev + 1e-9)).clip(0.5, 2.0)
 
-    # 단기 추세 (최근 2개월 평균 / 이전 2개월 평균)
-    _roll2      = _df["qty"].shift(1).rolling(2, min_periods=1).mean()
-    _roll2_prev = _df["qty"].shift(3).rolling(2, min_periods=1).mean()
-    _df["trend"] = (_roll2 / (_roll2_prev + 1e-9)).clip(0.5, 2.0)
+        # 계절성 가중치
+        _season_w = {1:1.35, 2:0.90, 3:1.00, 4:1.05, 5:1.10, 6:1.05,
+                     7:1.20, 8:1.25, 9:1.15, 10:1.05, 11:1.30, 12:1.50}
+        _df["season_weight"] = _df["month"].map(_season_w)
 
-    # 계절성 가중치
-    _season_w = {1:1.35, 2:0.90, 3:1.00, 4:1.05, 5:1.10, 6:1.05,
-                 7:1.20, 8:1.25, 9:1.15, 10:1.05, 11:1.30, 12:1.50}
-    _df["season_weight"] = _df["month"].map(_season_w)
+        # 복합 가중치
+        _df["total_weight"] = _df["dow_weight"] * _df["season_weight"]
 
-    # 복합 가중치
-    _df["total_weight"] = _df["dow_weight"] * _df["season_weight"]
+        # 유통기한 위험 피처 (잔여일 짧을수록 수요 촉진/폐기 위험)
+        _df["expiry_urgency"] = max(0, 1 - _expiry_days / 90)   # 90일 이하일수록 1에 가까움
 
-    # 유통기한 위험 피처 (잔여일 짧을수록 수요 촉진/폐기 위험)
-    _df["expiry_urgency"] = max(0, 1 - _expiry_days / 90)   # 90일 이하일수록 1에 가까움
+        # NaN 처리
+        _df = _df.fillna(0)
 
-    # NaN 처리
-    _df = _df.fillna(0)
+        _FEAT_COLS = [
+            "month", "quarter", "is_yearend", "is_summer",
+            "dow_weight", "season_weight", "total_weight", "expiry_urgency",
+            "lag_1", "lag_2", "lag_3",
+            "roll_mean_2", "roll_mean_3", "roll_std_3", "trend",
+        ]
+        _TARGET = "qty"
 
-    _FEAT_COLS = [
-        "month", "quarter", "is_yearend", "is_summer",
-        "dow_weight", "season_weight", "total_weight", "expiry_urgency",
-        "lag_1", "lag_2", "lag_3",
-        "roll_mean_2", "roll_mean_3", "roll_std_3", "trend",
-    ]
-    _TARGET = "qty"
+        # 학습 데이터 (마지막 1개월은 예측 검증용)
+        _train_df = _df.copy()
+        _X_train  = _train_df[_FEAT_COLS].values
+        _y_train  = _train_df[_TARGET].values
 
-    # 학습 데이터 (마지막 1개월은 예측 검증용)
-    _train_df = _df.copy()
-    _X_train  = _train_df[_FEAT_COLS].values
-    _y_train  = _train_df[_TARGET].values
+        # 시간 가중치: 최근 월 강조 (exp decay τ=4개월)
+        _t_weight = _np.exp(-(_n - 1 - _np.arange(_n)) / 4.0)
 
-    # 시간 가중치: 최근 월 강조 (exp decay τ=4개월)
-    _t_weight = _np.exp(-(_n - 1 - _np.arange(_n)) / 4.0)
+        _prog.progress(35, text="LightGBM 모델 학습 중...")
 
-    _prog.progress(35, text="LightGBM 모델 학습 중...")
+        # ── 3) LightGBM 학습 ────────────────────────────────────────
+        _base_params = {
+            "objective"              : "tweedie",
+            "tweedie_variance_power" : 1.2,
+            "metric"                 : "rmse",
+            "verbosity"              : -1,
+            "random_state"           : 42,
+            "n_jobs"                 : -1,
+            "num_leaves"             : 31,
+            "max_depth"              : 6,
+            "min_child_samples"      : max(1, _n // 3),
+            "learning_rate"          : 0.05,
+            "n_estimators"           : 500,
+            "subsample"              : 0.8,
+            "colsample_bytree"       : 0.8,
+            "reg_alpha"              : 0.1,
+            "reg_lambda"             : 0.5,
+        }
 
-    # ── 3) LightGBM 학습 ────────────────────────────────────────
-    _base_params = {
-        "objective"              : "tweedie",
-        "tweedie_variance_power" : 1.2,
-        "metric"                 : "rmse",
-        "verbosity"              : -1,
-        "random_state"           : 42,
-        "n_jobs"                 : -1,
-        "num_leaves"             : 31,
-        "max_depth"              : 6,
-        "min_child_samples"      : max(1, _n // 3),
-        "learning_rate"          : 0.05,
-        "n_estimators"           : 500,
-        "subsample"              : 0.8,
-        "colsample_bytree"       : 0.8,
-        "reg_alpha"              : 0.1,
-        "reg_lambda"             : 0.5,
-    }
+        _best_params = _base_params.copy()
+        _optuna_result = None
 
-    _best_params = _base_params.copy()
-    _optuna_result = None
+        if _use_optuna and _n >= 5:
+            _prog.progress(40, text=f"Optuna 탐색 중 ({_n_trials} trials)...")
+            try:
+                import optuna as _opt
+                _opt.logging.set_verbosity(_opt.logging.WARNING)
 
-    if _use_optuna and _n >= 5:
-        _prog.progress(40, text=f"Optuna 탐색 중 ({_n_trials} trials)...")
-        try:
-            import optuna as _opt
-            _opt.logging.set_verbosity(_opt.logging.WARNING)
+                def _obj(trial):
+                    _p = {
+                        "objective"              : "tweedie",
+                        "tweedie_variance_power" : trial.suggest_float("tvp", 1.0, 1.5),
+                        "metric"                 : "rmse",
+                        "verbosity"              : -1,
+                        "random_state"           : 42,
+                        "n_jobs"                 : -1,
+                        "num_leaves"             : trial.suggest_int("nl", 15, 63),
+                        "max_depth"              : trial.suggest_int("md", 3, 8),
+                        "min_child_samples"      : max(1, trial.suggest_int("mcs", 1, max(2, _n//2))),
+                        "learning_rate"          : trial.suggest_float("lr", 0.02, 0.1, log=True),
+                        "subsample"              : trial.suggest_float("ss", 0.6, 1.0),
+                        "colsample_bytree"       : trial.suggest_float("cs", 0.6, 1.0),
+                        "reg_alpha"              : trial.suggest_float("ra", 1e-3, 0.5, log=True),
+                        "reg_lambda"             : trial.suggest_float("rl", 0.1, 1.0, log=True),
+                    }
+                    _ds = _lgb.Dataset(_X_train, label=_y_train, weight=_t_weight, free_raw_data=False)
+                    _m  = _lgb.train(_p, _ds, num_boost_round=300,
+                                     callbacks=[_lgb.log_evaluation(period=-1)])
+                    _pr = _np.maximum(_m.predict(_X_train), 0)
+                    _denom = _np.sum(_np.abs(_y_train))
+                    return (_np.sum(_np.abs(_y_train - _pr)) / _denom * 100) if _denom > 0 else 999
 
-            def _obj(trial):
-                _p = {
-                    "objective"              : "tweedie",
-                    "tweedie_variance_power" : trial.suggest_float("tvp", 1.0, 1.5),
-                    "metric"                 : "rmse",
-                    "verbosity"              : -1,
-                    "random_state"           : 42,
-                    "n_jobs"                 : -1,
-                    "num_leaves"             : trial.suggest_int("nl", 15, 63),
-                    "max_depth"              : trial.suggest_int("md", 3, 8),
-                    "min_child_samples"      : max(1, trial.suggest_int("mcs", 1, max(2, _n//2))),
-                    "learning_rate"          : trial.suggest_float("lr", 0.02, 0.1, log=True),
-                    "subsample"              : trial.suggest_float("ss", 0.6, 1.0),
-                    "colsample_bytree"       : trial.suggest_float("cs", 0.6, 1.0),
-                    "reg_alpha"              : trial.suggest_float("ra", 1e-3, 0.5, log=True),
-                    "reg_lambda"             : trial.suggest_float("rl", 0.1, 1.0, log=True),
+                _study = _opt.create_study(direction="minimize",
+                                           sampler=_opt.samplers.TPESampler(seed=42))
+                _study.optimize(_obj, n_trials=_n_trials, show_progress_bar=False)
+                _bp = _study.best_params
+                _optuna_result = {"best_wmape": _study.best_value, "params": _bp}
+                _best_params = {
+                    "objective": "tweedie",
+                    "tweedie_variance_power": _bp["tvp"],
+                    "metric": "rmse", "verbosity": -1, "random_state": 42, "n_jobs": -1,
+                    "num_leaves": _bp["nl"], "max_depth": _bp["md"],
+                    "min_child_samples": max(1, _bp["mcs"]),
+                    "learning_rate": _bp["lr"],
+                    "n_estimators": 500,
+                    "subsample": _bp["ss"], "colsample_bytree": _bp["cs"],
+                    "reg_alpha": _bp["ra"], "reg_lambda": _bp["rl"],
                 }
-                _ds = _lgb.Dataset(_X_train, label=_y_train, weight=_t_weight, free_raw_data=False)
-                _m  = _lgb.train(_p, _ds, num_boost_round=300,
-                                 callbacks=[_lgb.log_evaluation(period=-1)])
-                _pr = _np.maximum(_m.predict(_X_train), 0)
-                _denom = _np.sum(_np.abs(_y_train))
-                return (_np.sum(_np.abs(_y_train - _pr)) / _denom * 100) if _denom > 0 else 999
+            except ImportError:
+                st.warning("Optuna 미설치. 기본 파라미터로 학습합니다.")
+            except Exception as _oe:
+                st.warning(f"Optuna 에러: {_oe}. 기본 파라미터로 학습합니다.")
 
-            _study = _opt.create_study(direction="minimize",
-                                       sampler=_opt.samplers.TPESampler(seed=42))
-            _study.optimize(_obj, n_trials=_n_trials, show_progress_bar=False)
-            _bp = _study.best_params
-            _optuna_result = {"best_wmape": _study.best_value, "params": _bp}
-            _best_params = {
-                "objective": "tweedie",
-                "tweedie_variance_power": _bp["tvp"],
-                "metric": "rmse", "verbosity": -1, "random_state": 42, "n_jobs": -1,
-                "num_leaves": _bp["nl"], "max_depth": _bp["md"],
-                "min_child_samples": max(1, _bp["mcs"]),
-                "learning_rate": _bp["lr"],
-                "n_estimators": 500,
-                "subsample": _bp["ss"], "colsample_bytree": _bp["cs"],
-                "reg_alpha": _bp["ra"], "reg_lambda": _bp["rl"],
-            }
-        except ImportError:
-            st.warning("Optuna 미설치. 기본 파라미터로 학습합니다.")
-        except Exception as _oe:
-            st.warning(f"Optuna 에러: {_oe}. 기본 파라미터로 학습합니다.")
+        _prog.progress(60, text="최종 모델 학습 중...")
 
-    _prog.progress(60, text="최종 모델 학습 중...")
+        _dtrain = _lgb.Dataset(_X_train, label=_y_train, weight=_t_weight, free_raw_data=False)
+        _model  = _lgb.train(
+            _best_params, _dtrain,
+            num_boost_round=_best_params.get("n_estimators", 500),
+            callbacks=[_lgb.log_evaluation(period=-1)],
+        )
 
-    _dtrain = _lgb.Dataset(_X_train, label=_y_train, weight=_t_weight, free_raw_data=False)
-    _model  = _lgb.train(
-        _best_params, _dtrain,
-        num_boost_round=_best_params.get("n_estimators", 500),
-        callbacks=[_lgb.log_evaluation(period=-1)],
-    )
+        # ── 4) 카테고리 편향 보정 (README Part2 bias_corr) ──────────
+        _train_preds = _np.maximum(_model.predict(_X_train), 0)
+        _actual_sum  = _y_train.sum()
+        _pred_sum    = _train_preds.sum()
+        _bias_corr   = (_actual_sum / (_pred_sum + 1e-9))
+        _bias_corr   = float(_np.clip(_bias_corr, 0.5, 2.0))   # 극단값 방지
 
-    # ── 4) 카테고리 편향 보정 (README Part2 bias_corr) ──────────
-    _train_preds = _np.maximum(_model.predict(_X_train), 0)
-    _actual_sum  = _y_train.sum()
-    _pred_sum    = _train_preds.sum()
-    _bias_corr   = (_actual_sum / (_pred_sum + 1e-9))
-    _bias_corr   = float(_np.clip(_bias_corr, 0.5, 2.0))   # 극단값 방지
+        # 학습 데이터 WMAPE
+        _train_preds_c = (_train_preds * _bias_corr).clip(0)
+        _denom = _np.sum(_np.abs(_y_train))
+        _train_wmape = (
+            _np.sum(_np.abs(_y_train - _train_preds_c)) / _denom * 100
+            if _denom > 0 else _np.nan
+        )
 
-    # 학습 데이터 WMAPE
-    _train_preds_c = (_train_preds * _bias_corr).clip(0)
-    _denom = _np.sum(_np.abs(_y_train))
-    _train_wmape = (
-        _np.sum(_np.abs(_y_train - _train_preds_c)) / _denom * 100
-        if _denom > 0 else _np.nan
-    )
+        _prog.progress(75, text="미래 수요 예측 중...")
 
-    _prog.progress(75, text="미래 수요 예측 중...")
+        # ── 5) 미래 예측 (롤링 방식: 예측값을 다음 lag에 투입) ──────
+        _last_date  = _df["date"].iloc[-1]
+        _last_qtys  = list(_df["qty"].values)   # 예측 시 업데이트
 
-    # ── 5) 미래 예측 (롤링 방식: 예측값을 다음 lag에 투입) ──────
-    _last_date  = _df["date"].iloc[-1]
-    _last_qtys  = list(_df["qty"].values)   # 예측 시 업데이트
+        _future_rows = []
+        for _fi in range(_pred_months):
+            _fd = _last_date + _pd.DateOffset(months=_fi + 1)
+            _mo = _fd.month
+            _q  = (_fi + 1 + 3) // 4  # quarter
 
-    _future_rows = []
-    for _fi in range(_pred_months):
-        _fd = _last_date + _pd.DateOffset(months=_fi + 1)
-        _mo = _fd.month
-        _q  = (_fi + 1 + 3) // 4  # quarter
+            _l1 = _last_qtys[-1]
+            _l2 = _last_qtys[-2] if len(_last_qtys) >= 2 else _l1
+            _l3 = _last_qtys[-3] if len(_last_qtys) >= 3 else _l1
+            _rm2 = _np.mean(_last_qtys[-2:])  if len(_last_qtys) >= 2 else _l1
+            _rm3 = _np.mean(_last_qtys[-3:])  if len(_last_qtys) >= 3 else _l1
+            _rs3 = _np.std(_last_qtys[-3:])   if len(_last_qtys) >= 3 else 0
+            _rp2 = _np.mean(_last_qtys[-4:-2]) if len(_last_qtys) >= 4 else _rm2
+            _trd = float(_np.clip(_rm2 / (_rp2 + 1e-9), 0.5, 2.0))
+            _sw  = _season_w.get(_mo, 1.0)
+            _eu  = max(0, 1 - (_expiry_days - _fi * 30) / 90)  # 시간 지날수록 긴박도 상승
 
-        _l1 = _last_qtys[-1]
-        _l2 = _last_qtys[-2] if len(_last_qtys) >= 2 else _l1
-        _l3 = _last_qtys[-3] if len(_last_qtys) >= 3 else _l1
-        _rm2 = _np.mean(_last_qtys[-2:])  if len(_last_qtys) >= 2 else _l1
-        _rm3 = _np.mean(_last_qtys[-3:])  if len(_last_qtys) >= 3 else _l1
-        _rs3 = _np.std(_last_qtys[-3:])   if len(_last_qtys) >= 3 else 0
-        _rp2 = _np.mean(_last_qtys[-4:-2]) if len(_last_qtys) >= 4 else _rm2
-        _trd = float(_np.clip(_rm2 / (_rp2 + 1e-9), 0.5, 2.0))
-        _sw  = _season_w.get(_mo, 1.0)
-        _eu  = max(0, 1 - (_expiry_days - _fi * 30) / 90)  # 시간 지날수록 긴박도 상승
+            _feat_row = _np.array([[
+                _mo, _q, int(_mo in [11,12,1]), int(_mo in [7,8]),
+                _DOW_W[_target_dow_idx], _sw, _DOW_W[_target_dow_idx] * _sw, _eu,
+                _l1, _l2, _l3, _rm2, _rm3, _rs3, _trd,
+            ]])
+            _raw_pred = float(_np.maximum(_model.predict(_feat_row), 0)[0])
+            _pred_val = float(_np.maximum(_raw_pred * _bias_corr, 0))
+            _adj_val  = float(_pred_val * _safety_coeff)
+            _order    = max(0, _adj_val - (_curr_stock if _fi == 0 else 0))
 
-        _feat_row = _np.array([[
-            _mo, _q, int(_mo in [11,12,1]), int(_mo in [7,8]),
-            _DOW_W[_target_dow_idx], _sw, _DOW_W[_target_dow_idx] * _sw, _eu,
-            _l1, _l2, _l3, _rm2, _rm3, _rs3, _trd,
-        ]])
-        _raw_pred = float(_np.maximum(_model.predict(_feat_row), 0)[0])
-        _pred_val = float(_np.maximum(_raw_pred * _bias_corr, 0))
-        _adj_val  = float(_pred_val * _safety_coeff)
-        _order    = max(0, _adj_val - (_curr_stock if _fi == 0 else 0))
+            _future_rows.append({
+                "월"        : _fd.strftime("%Y-%m"),
+                "예측수요"  : round(_pred_val, 1),
+                "조정수요"  : round(_adj_val, 1),
+                "발주권고량": round(_order, 0),
+            })
+            _last_qtys.append(_pred_val)   # 다음 lag에 투입
 
-        _future_rows.append({
-            "월"        : _fd.strftime("%Y-%m"),
-            "예측수요"  : round(_pred_val, 1),
-            "조정수요"  : round(_adj_val, 1),
-            "발주권고량": round(_order, 0),
-        })
-        _last_qtys.append(_pred_val)   # 다음 lag에 투입
+        _pred_df = _pd.DataFrame(_future_rows)
 
-    _pred_df = _pd.DataFrame(_future_rows)
+        _prog.progress(90, text="결과 정리 중...")
 
-    _prog.progress(90, text="결과 정리 중...")
+        # ── 6) 피처 중요도 ───────────────────────────────────────────
+        _feat_imp = _pd.DataFrame({
+            "피처"  : _FEAT_COLS,
+            "중요도": _model.feature_importance(importance_type="gain"),
+        }).sort_values("중요도", ascending=False)
 
-    # ── 6) 피처 중요도 ───────────────────────────────────────────
-    _feat_imp = _pd.DataFrame({
-        "피처"  : _FEAT_COLS,
-        "중요도": _model.feature_importance(importance_type="gain"),
-    }).sort_values("중요도", ascending=False)
+        _prog.progress(100, text="완료!")
+        _prog.empty()
 
-    _prog.progress(100, text="완료!")
-    _prog.empty()
+        # ════════════════════════════════════════════════════════════
+        #  결과 출력
+        # ════════════════════════════════════════════════════════════
 
-    # ════════════════════════════════════════════════════════════
-    #  결과 출력
-    # ════════════════════════════════════════════════════════════
+        # ── KPI 카드 ─────────────────────────────────────────────────
+        _k1, _k2, _k3, _k4, _k5 = st.columns(5)
+        _k1.metric("품목", _item_name[:12] if _item_name else "-")
+        _k2.metric("학습 WMAPE", f"{_train_wmape:.1f}%" if not _np.isnan(_train_wmape) else "-",
+                   delta="✅ 목표달성" if _train_wmape <= 10 else "⚠️ 튜닝권장",
+                   delta_color="normal" if _train_wmape <= 10 else "inverse")
+        _k3.metric("편향 보정계수", f"{_bias_corr:.3f}")
+        _k4.metric("현재 재고", f"{_curr_stock}개")
+        _k5.metric("총 발주 권고량", f"{int(_pred_df['발주권고량'].sum())}개")
 
-    # ── KPI 카드 ─────────────────────────────────────────────────
-    _k1, _k2, _k3, _k4, _k5 = st.columns(5)
-    _k1.metric("품목", _item_name[:12] if _item_name else "-")
-    _k2.metric("학습 WMAPE", f"{_train_wmape:.1f}%" if not _np.isnan(_train_wmape) else "-",
-               delta="✅ 목표달성" if _train_wmape <= 10 else "⚠️ 튜닝권장",
-               delta_color="normal" if _train_wmape <= 10 else "inverse")
-    _k3.metric("편향 보정계수", f"{_bias_corr:.3f}")
-    _k4.metric("현재 재고", f"{_curr_stock}개")
-    _k5.metric("총 발주 권고량", f"{int(_pred_df['발주권고량'].sum())}개")
+        if _optuna_result:
+            st.success(f"✅ Optuna 최적화 완료 | Best WMAPE: {_optuna_result['best_wmape']:.2f}%  "
+                       f"(num_leaves={_optuna_result['params']['nl']}, "
+                       f"lr={_optuna_result['params']['lr']:.4f})")
 
-    if _optuna_result:
-        st.success(f"✅ Optuna 최적화 완료 | Best WMAPE: {_optuna_result['best_wmape']:.2f}%  "
-                   f"(num_leaves={_optuna_result['params']['nl']}, "
-                   f"lr={_optuna_result['params']['lr']:.4f})")
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        # ── 결과 탭 ─────────────────────────────────────────────────
+        _res_tab1, _res_tab2, _res_tab3 = st.tabs(["📈 수요 예측 차트", "📦 발주 계획표", "🔍 피처 중요도"])
 
-    # ── 결과 탭 ─────────────────────────────────────────────────
-    _res_tab1, _res_tab2, _res_tab3 = st.tabs(["📈 수요 예측 차트", "📦 발주 계획표", "🔍 피처 중요도"])
-
-    with _res_tab1:
-        if _HAS_PL3:
-            # ── 차트 상단: 타이틀 + 메타 정보 (HTML) ─────────────
-            st.markdown(
-                f"<div style='font-size:0.95rem;font-weight:600;color:#1A1A2E;margin-bottom:4px'>"
-                f"📦 {_item_name} — AI 수요예측</div>"
-                f"<div style='font-size:0.78rem;color:#64748b;margin-bottom:10px'>"
-                f"LightGBM Tweedie · 편향보정 {_bias_corr:.3f} · 안전재고 ×{_safety_coeff}</div>",
-                unsafe_allow_html=True,
-            )
-
-            _fig = _go.Figure()
-
-            # 실적 (막대)
-            _fig.add_trace(_go.Bar(
-                x=_df["ym"], y=_df["qty"],
-                name="실적", marker_color="#93c5fd", opacity=0.85,
-            ))
-            # 학습 적합값 (편향 보정 적용)
-            _fitted = (_np.maximum(_model.predict(_X_train), 0) * _bias_corr).clip(0)
-            _fig.add_trace(_go.Scatter(
-                x=_df["ym"], y=_np.round(_fitted, 1),
-                name="적합값", mode="lines",
-                line=dict(color="#7C6FCD", width=2),
-            ))
-            # 예측 (점선) — trace 이름 짧게
-            _fig.add_trace(_go.Scatter(
-                x=_pred_df["월"], y=_pred_df["예측수요"],
-                name="예측", mode="lines+markers",
-                line=dict(color="#f97316", width=2.5, dash="dash"),
-                marker=dict(size=8, symbol="diamond"),
-            ))
-            # 조정수요 (안전재고 적용)
-            _fig.add_trace(_go.Scatter(
-                x=_pred_df["월"], y=_pred_df["조정수요"],
-                name=f"조정(×{_safety_coeff})", mode="lines",
-                line=dict(color="#ef4444", width=1.5, dash="dot"),
-            ))
-            # 현재 재고 수평선
-            _fig.add_hline(
-                y=_curr_stock, line_dash="dot", line_color="#22c55e",
-                annotation_text=f"현재고 {_curr_stock}",
-                annotation_font_size=11,
-                annotation_position="bottom right",
-            )
-            # 유통기한 배경색 (annotation 텍스트 제거 → 겹침 방지)
-            if _expiry_days <= 30:
-                _fig.add_vrect(
-                    x0=_pred_df["월"].iloc[0], x1=_pred_df["월"].iloc[-1],
-                    fillcolor="rgba(239,68,68,0.07)", line_width=0,
-                )
-            elif _expiry_days <= 60:
-                _fig.add_vrect(
-                    x0=_pred_df["월"].iloc[0], x1=_pred_df["월"].iloc[-1],
-                    fillcolor="rgba(249,115,22,0.05)", line_width=0,
+        with _res_tab1:
+            if _HAS_PL3:
+                # ── 차트 상단: 타이틀 + 메타 정보 (HTML) ─────────────
+                st.markdown(
+                    f"<div style='font-size:0.95rem;font-weight:600;color:#1A1A2E;margin-bottom:4px'>"
+                    f"📦 {_item_name} — AI 수요예측</div>"
+                    f"<div style='font-size:0.78rem;color:#64748b;margin-bottom:10px'>"
+                    f"LightGBM Tweedie · 편향보정 {_bias_corr:.3f} · 안전재고 ×{_safety_coeff}</div>",
+                    unsafe_allow_html=True,
                 )
 
-            _fig.update_layout(
-                title=None,
-                height=360,
-                margin=dict(l=10, r=20, t=10, b=60),
-                legend=dict(
-                    orientation="h",
-                    y=-0.22, x=0.5, xanchor="center",
-                    font=dict(size=12),
-                    bgcolor="rgba(255,255,255,0.8)",
-                    bordercolor="#e2e8f0", borderwidth=1,
-                ),
-                xaxis=dict(showgrid=True, gridcolor="#f1f1ef", tickfont=dict(size=11)),
-                yaxis=dict(title="수요량 (개)", showgrid=True, gridcolor="#f1f1ef",
-                           titlefont=dict(size=11)),
-                plot_bgcolor="#fafafa", paper_bgcolor="white",
-                bargap=0.3,
-            )
-            st.plotly_chart(_fig, use_container_width=True, config={"displayModeBar": False})
+                _fig = _go.Figure()
 
-            # 유통기한 경고 (차트 아래 텍스트로 분리)
-            if _expiry_days <= 30:
-                st.caption(f"🔴 예측 구간: 유통기한 {_expiry_days}일 이내 품목")
-            elif _expiry_days <= 60:
-                st.caption(f"🟠 예측 구간: 유통기한 {_expiry_days}일 이내 품목")
+                # 실적 (막대)
+                _fig.add_trace(_go.Bar(
+                    x=_df["ym"], y=_df["qty"],
+                    name="실적", marker_color="#93c5fd", opacity=0.85,
+                ))
+                # 학습 적합값 (편향 보정 적용)
+                _fitted = (_np.maximum(_model.predict(_X_train), 0) * _bias_corr).clip(0)
+                _fig.add_trace(_go.Scatter(
+                    x=_df["ym"], y=_np.round(_fitted, 1),
+                    name="적합값", mode="lines",
+                    line=dict(color="#7C6FCD", width=2),
+                ))
+                # 예측 (점선) — trace 이름 짧게
+                _fig.add_trace(_go.Scatter(
+                    x=_pred_df["월"], y=_pred_df["예측수요"],
+                    name="예측", mode="lines+markers",
+                    line=dict(color="#f97316", width=2.5, dash="dash"),
+                    marker=dict(size=8, symbol="diamond"),
+                ))
+                # 조정수요 (안전재고 적용)
+                _fig.add_trace(_go.Scatter(
+                    x=_pred_df["월"], y=_pred_df["조정수요"],
+                    name=f"조정(×{_safety_coeff})", mode="lines",
+                    line=dict(color="#ef4444", width=1.5, dash="dot"),
+                ))
+                # 현재 재고 수평선
+                _fig.add_hline(
+                    y=_curr_stock, line_dash="dot", line_color="#22c55e",
+                    annotation_text=f"현재고 {_curr_stock}",
+                    annotation_font_size=11,
+                    annotation_position="bottom right",
+                )
+                # 유통기한 배경색 (annotation 텍스트 제거 → 겹침 방지)
+                if _expiry_days <= 30:
+                    _fig.add_vrect(
+                        x0=_pred_df["월"].iloc[0], x1=_pred_df["월"].iloc[-1],
+                        fillcolor="rgba(239,68,68,0.07)", line_width=0,
+                    )
+                elif _expiry_days <= 60:
+                    _fig.add_vrect(
+                        x0=_pred_df["월"].iloc[0], x1=_pred_df["월"].iloc[-1],
+                        fillcolor="rgba(249,115,22,0.05)", line_width=0,
+                    )
 
-            # 재고 소진 예상 시점
-            _cumulative = 0
-            _stockout_mo = None
-            for _, _pr in _pred_df.iterrows():
-                _cumulative += _pr["예측수요"]
-                if _cumulative >= _curr_stock:
-                    _stockout_mo = _pr["월"]
-                    break
+                _fig.update_layout(
+                    title=None,
+                    height=360,
+                    margin=dict(l=10, r=20, t=10, b=60),
+                    legend=dict(
+                        orientation="h",
+                        y=-0.22, x=0.5, xanchor="center",
+                        font=dict(size=12),
+                        bgcolor="rgba(255,255,255,0.8)",
+                        bordercolor="#e2e8f0", borderwidth=1,
+                    ),
+                    xaxis=dict(showgrid=True, gridcolor="#f1f1ef", tickfont=dict(size=11)),
+                    yaxis=dict(title=dict(text="수요량 (개)", font=dict(size=11)),
+                               showgrid=True, gridcolor="#f1f1ef"),
+                    plot_bgcolor="#fafafa", paper_bgcolor="white",
+                    bargap=0.3,
+                )
+                st.plotly_chart(_fig, use_container_width=True, config={"displayModeBar": False})
 
-            if _stockout_mo:
-                st.warning(f"⚠️ 예측 기준 재고 소진 예상 시점: **{_stockout_mo}** "
-                           f"(현재고 {_curr_stock}개, 누적수요 {round(_cumulative)}개)")
+                # 유통기한 경고 (차트 아래 텍스트로 분리)
+                if _expiry_days <= 30:
+                    st.caption(f"🔴 예측 구간: 유통기한 {_expiry_days}일 이내 품목")
+                elif _expiry_days <= 60:
+                    st.caption(f"🟠 예측 구간: 유통기한 {_expiry_days}일 이내 품목")
+
+                # 재고 소진 예상 시점
+                _cumulative = 0
+                _stockout_mo = None
+                for _, _pr in _pred_df.iterrows():
+                    _cumulative += _pr["예측수요"]
+                    if _cumulative >= _curr_stock:
+                        _stockout_mo = _pr["월"]
+                        break
+
+                if _stockout_mo:
+                    st.warning(f"⚠️ 예측 기준 재고 소진 예상 시점: **{_stockout_mo}** "
+                               f"(현재고 {_curr_stock}개, 누적수요 {round(_cumulative)}개)")
+                else:
+                    st.success(f"✅ 예측 기간 내 재고 소진 없음 (현재고 {_curr_stock}개 충분)")
+
+                # 유통기한 경고
+                if _expiry_days <= 14:
+                    st.error(f"🔴 유통기한 **{_expiry_days}일** 남음 — 즉시 판촉/이전 검토 필요")
+                elif _expiry_days <= 30:
+                    st.warning(f"🟠 유통기한 **{_expiry_days}일** — 조기 소진 모니터링 권장")
             else:
-                st.success(f"✅ 예측 기간 내 재고 소진 없음 (현재고 {_curr_stock}개 충분)")
+                st.dataframe(_pred_df, use_container_width=True, hide_index=True)
 
-            # 유통기한 경고
-            if _expiry_days <= 14:
-                st.error(f"🔴 유통기한 **{_expiry_days}일** 남음 — 즉시 판촉/이전 검토 필요")
-            elif _expiry_days <= 30:
-                st.warning(f"🟠 유통기한 **{_expiry_days}일** — 조기 소진 모니터링 권장")
-        else:
-            st.dataframe(_pred_df, use_container_width=True, hide_index=True)
-
-    with _res_tab2:
-        # 발주 계획표
-        st.markdown(f"""
-        **발주 정책**: `발주권고량 = max(0, 예측수요 × {_safety_coeff} − 현재고)`
-        &nbsp;|&nbsp; 안전재고 계수: **{_safety_coeff}** ({_safety_key})
-        &nbsp;|&nbsp; 편향 보정계수: **{_bias_corr:.3f}**
-        """)
-        _display_df = _pred_df.copy()
-        _display_df["발주필요"] = (_display_df["발주권고량"] > 0).map({True: "✅ 발주", False: "✔ 충분"})
-        st.dataframe(
-            _display_df.style.apply(
-                lambda row: ["background-color:#fef2f2" if row["발주필요"] == "✅ 발주"
-                             else "background-color:#f0fdf4"] * len(row), axis=1
-            ),
-            use_container_width=True, hide_index=True,
-        )
-        # 총계
-        _tot_order = int(_pred_df["발주권고량"].sum())
-        _tot_adj   = round(_pred_df["조정수요"].sum(), 0)
-        st.markdown(
-            f"**총 예측수요**: {round(_pred_df['예측수요'].sum(),1)}개 &nbsp;|&nbsp; "
-            f"**총 조정수요**: {_tot_adj}개 &nbsp;|&nbsp; "
-            f"**총 발주 권고량**: **{_tot_order}개**"
-        )
-
-        # 알고리즘 설명 expander
-        with st.expander("📖 알고리즘 상세 (README 기반 LightGBM 파이프라인)"):
+        with _res_tab2:
+            # 발주 계획표
             st.markdown(f"""
-| 항목 | 내용 |
-|---|---|
-| **모델** | LightGBM Tweedie 회귀 (수요량 0포함 우편향 분포 최적) |
-| **목적함수** | tweedie (power={_best_params.get('tweedie_variance_power',1.2):.3f}) |
-| **피처 수** | {len(_FEAT_COLS)}개 (Lag · Rolling · 계절성 · 요일 가중치 · 유통기한 긴박도) |
-| **시간 가중치** | 최근 월 강조 exp(-t/4), 최근 4개월 2배 이상 가중 |
-| **편향 보정** | 학습셋 실측합/예측합 = **{_bias_corr:.3f}** (카테고리 체계적 과소예측 수치 보정) |
-| **안전재고 계수** | {_safety_coeff} ({_safety_key}) — 신선도 반영 |
-| **Optuna** | {"적용 (" + str(_n_trials) + " trials)" if _use_optuna else "미적용 (기본 파라미터)"} |
-| **유통기한 피처** | expiry_urgency = max(0, 1 − 잔여일/90) |
+            **발주 정책**: `발주권고량 = max(0, 예측수요 × {_safety_coeff} − 현재고)`
+            &nbsp;|&nbsp; 안전재고 계수: **{_safety_coeff}** ({_safety_key})
+            &nbsp;|&nbsp; 편향 보정계수: **{_bias_corr:.3f}**
             """)
-
-    with _res_tab3:
-        if _HAS_PL3:
-            _top_imp = _feat_imp.head(10)
-            _max_imp = _top_imp["중요도"].max()
-            _fig_i = _go.Figure(_go.Bar(
-                x=_top_imp["중요도"],
-                y=_top_imp["피처"],
-                orientation="h",
-                marker=dict(
-                    color=_top_imp["중요도"],
-                    colorscale=[[0,"#e2e8f0"],[0.5,"#7C6FCD"],[1,"#1A1A2E"]],
+            _display_df = _pred_df.copy()
+            _display_df["발주필요"] = (_display_df["발주권고량"] > 0).map({True: "✅ 발주", False: "✔ 충분"})
+            st.dataframe(
+                _display_df.style.apply(
+                    lambda row: ["background-color:#fef2f2" if row["발주필요"] == "✅ 발주"
+                                 else "background-color:#f0fdf4"] * len(row), axis=1
                 ),
-                text=[f"{v:.0f}" for v in _top_imp["중요도"]],
-                textposition="outside",
-            ))
-            _fig_i.update_layout(
-                title="피처 중요도 Top 10 (Gain 기준)",
-                height=320, margin=dict(l=0, r=60, t=40, b=0),
-                yaxis=dict(autorange="reversed"),
-                xaxis=dict(showgrid=True, gridcolor="#f1f1ef"),
-                plot_bgcolor="#fafafa", paper_bgcolor="white",
+                use_container_width=True, hide_index=True,
             )
-            st.plotly_chart(_fig_i, use_container_width=True, config={"displayModeBar": False})
+            # 총계
+            _tot_order = int(_pred_df["발주권고량"].sum())
+            _tot_adj   = round(_pred_df["조정수요"].sum(), 0)
+            st.markdown(
+                f"**총 예측수요**: {round(_pred_df['예측수요'].sum(),1)}개 &nbsp;|&nbsp; "
+                f"**총 조정수요**: {_tot_adj}개 &nbsp;|&nbsp; "
+                f"**총 발주 권고량**: **{_tot_order}개**"
+            )
 
-            # 피처 중요도 의미 설명
-            _imp_explain = {
-                "lag_1"        : "직전 1개월 수요량 — 가장 강력한 단기 신호",
-                "roll_mean_3"  : "최근 3개월 이동평균 — 단기 추세 요약",
-                "season_weight": "월별 계절성 가중치 (연말 1.50, 여름 1.25)",
-                "trend"        : "단기 추세율 (최근 2개월 / 이전 2개월)",
-                "expiry_urgency": "유통기한 긴박도 — 잔여일 짧을수록 ↑",
-                "total_weight" : "요일×계절 복합 가중치",
-                "lag_2"        : "2개월 전 수요량",
-                "roll_mean_2"  : "최근 2개월 이동평균",
-                "month"        : "월 번호 (계절성 비선형 포착)",
-                "is_yearend"   : "연말연시 여부 (11~1월)",
-            }
-            _top1 = _feat_imp.iloc[0]["피처"]
-            _expl = _imp_explain.get(_top1, "핵심 예측 신호")
-            st.info(f"🏆 **1위 피처 `{_top1}`**: {_expl}")
-        else:
-            st.dataframe(_feat_imp, use_container_width=True, hide_index=True)
+            # 알고리즘 설명 expander
+            with st.expander("📖 알고리즘 상세 (README 기반 LightGBM 파이프라인)"):
+                st.markdown(f"""
+    | 항목 | 내용 |
+    |---|---|
+    | **모델** | LightGBM Tweedie 회귀 (수요량 0포함 우편향 분포 최적) |
+    | **목적함수** | tweedie (power={_best_params.get('tweedie_variance_power',1.2):.3f}) |
+    | **피처 수** | {len(_FEAT_COLS)}개 (Lag · Rolling · 계절성 · 요일 가중치 · 유통기한 긴박도) |
+    | **시간 가중치** | 최근 월 강조 exp(-t/4), 최근 4개월 2배 이상 가중 |
+    | **편향 보정** | 학습셋 실측합/예측합 = **{_bias_corr:.3f}** (카테고리 체계적 과소예측 수치 보정) |
+    | **안전재고 계수** | {_safety_coeff} ({_safety_key}) — 신선도 반영 |
+    | **Optuna** | {"적용 (" + str(_n_trials) + " trials)" if _use_optuna else "미적용 (기본 파라미터)"} |
+    | **유통기한 피처** | expiry_urgency = max(0, 1 − 잔여일/90) |
+                """)
+
+        with _res_tab3:
+            if _HAS_PL3:
+                _top_imp = _feat_imp.head(10)
+                _max_imp = _top_imp["중요도"].max()
+                _fig_i = _go.Figure(_go.Bar(
+                    x=_top_imp["중요도"],
+                    y=_top_imp["피처"],
+                    orientation="h",
+                    marker=dict(
+                        color=_top_imp["중요도"],
+                        colorscale=[[0,"#e2e8f0"],[0.5,"#7C6FCD"],[1,"#1A1A2E"]],
+                    ),
+                    text=[f"{v:.0f}" for v in _top_imp["중요도"]],
+                    textposition="outside",
+                ))
+                _fig_i.update_layout(
+                    title="피처 중요도 Top 10 (Gain 기준)",
+                    height=320, margin=dict(l=0, r=60, t=40, b=0),
+                    yaxis=dict(autorange="reversed"),
+                    xaxis=dict(showgrid=True, gridcolor="#f1f1ef"),
+                    plot_bgcolor="#fafafa", paper_bgcolor="white",
+                )
+                st.plotly_chart(_fig_i, use_container_width=True, config={"displayModeBar": False})
+
+                # 피처 중요도 의미 설명
+                _imp_explain = {
+                    "lag_1"        : "직전 1개월 수요량 — 가장 강력한 단기 신호",
+                    "roll_mean_3"  : "최근 3개월 이동평균 — 단기 추세 요약",
+                    "season_weight": "월별 계절성 가중치 (연말 1.50, 여름 1.25)",
+                    "trend"        : "단기 추세율 (최근 2개월 / 이전 2개월)",
+                    "expiry_urgency": "유통기한 긴박도 — 잔여일 짧을수록 ↑",
+                    "total_weight" : "요일×계절 복합 가중치",
+                    "lag_2"        : "2개월 전 수요량",
+                    "roll_mean_2"  : "최근 2개월 이동평균",
+                    "month"        : "월 번호 (계절성 비선형 포착)",
+                    "is_yearend"   : "연말연시 여부 (11~1월)",
+                }
+                _top1 = _feat_imp.iloc[0]["피처"]
+                _expl = _imp_explain.get(_top1, "핵심 예측 신호")
+                st.info(f"🏆 **1위 피처 `{_top1}`**: {_expl}")
+            else:
+                st.dataframe(_feat_imp, use_container_width=True, hide_index=True)

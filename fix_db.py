@@ -1,139 +1,107 @@
+# -*- coding: utf-8 -*-
 """
-DB 마이그레이션 스크립트 — 기존 scm.db에 누락 컬럼/테이블 추가
-실행: python fix_db.py
+MySQL scm_db — item_code 누락 컬럼 및 관련 인덱스 추가 마이그레이션
+실행: python fix_mysql_item_code.py
 """
-import sqlite3, os
+import os
+import pymysql
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'scm.db')
+DB_CONFIG = dict(
+    host     = os.environ.get("SCM_DB_HOST", "localhost"),
+    port     = int(os.environ.get("SCM_DB_PORT", 3306)),
+    user     = os.environ.get("SCM_DB_USER", "scm_user"),
+    password = os.environ.get("SCM_DB_PASS", "scm1234"),
+    database = os.environ.get("SCM_DB_NAME", "scm_db"),
+    charset  = "utf8mb4",
+    cursorclass = pymysql.cursors.DictCursor,
+)
 
-def add_column(c, table, col, col_type="TEXT"):
-    try:
-        c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
-        print(f"  ✅ {table}.{col} 추가")
-    except Exception as e:
-        if "duplicate column" in str(e).lower():
-            pass
-        else:
-            print(f"  ⚠️  {table}.{col}: {e}")
+def col_exists(cur, table, col):
+    cur.execute("""
+        SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME   = %s
+          AND COLUMN_NAME  = %s
+    """, (table, col))
+    return cur.fetchone()["cnt"] > 0
 
-conn = sqlite3.connect(DB_PATH)
-c = conn.cursor()
+def add_col(cur, table, col, definition):
+    if col_exists(cur, table, col):
+        print(f"  ↩️  {table}.{col} — 이미 존재, 스킵")
+    else:
+        cur.execute(f"ALTER TABLE `{table}` ADD COLUMN `{col}` {definition}")
+        print(f"  ✅ {table}.{col} 추가 완료")
 
-# ── invoice_verifications ──────────────
-add_column(c, "invoice_verifications", "supplier_invoice_no", "TEXT")
-add_column(c, "invoice_verifications", "variance_amount", "REAL DEFAULT 0")
-add_column(c, "invoice_verifications", "match_result", "TEXT DEFAULT '검토중'")
-add_column(c, "invoice_verifications", "status", "TEXT DEFAULT '검토중'")
+def main():
+    conn = pymysql.connect(**DB_CONFIG)
+    cur  = conn.cursor()
+    print("=" * 55)
+    print("MySQL scm_db 마이그레이션 시작")
+    print("=" * 55)
 
-# ── supplier_evaluations ──────────────
-add_column(c, "supplier_evaluations", "evaluation_period", "TEXT")
-add_column(c, "supplier_evaluations", "comment", "TEXT")
-add_column(c, "supplier_evaluations", "grade", "TEXT")
-add_column(c, "supplier_evaluations", "eval_number", "TEXT")
+    # ── 1) inventory.item_code ─────────────────────────────
+    # db.py 스키마에 있지만 이전에 생성된 테이블에 없을 수 있음
+    print("\n[inventory]")
+    add_col(cur, "inventory", "item_code",     "VARCHAR(100)")
+    add_col(cur, "inventory", "lot_number",    "VARCHAR(100)")
+    add_col(cur, "inventory", "expiry_date",   "DATE")
+    add_col(cur, "inventory", "serial_number", "VARCHAR(100)")
+    add_col(cur, "inventory", "system_qty",    "INT DEFAULT 0")
+    add_col(cur, "inventory", "min_stock",     "INT DEFAULT 0")
 
-# ── purchase_tax_invoices ──────────────
-add_column(c, "purchase_tax_invoices", "ti_number", "TEXT")
-add_column(c, "purchase_tax_invoices", "supplier_id", "INTEGER")
-add_column(c, "purchase_tax_invoices", "supplier_name", "TEXT")
-add_column(c, "purchase_tax_invoices", "tax_invoice_no", "TEXT")
-add_column(c, "purchase_tax_invoices", "payment_terms", "TEXT DEFAULT '30일'")
-add_column(c, "purchase_tax_invoices", "payment_method", "TEXT DEFAULT '계좌이체'")
+    # item_code 기존 데이터 보정: NULL이면 item_name 으로 채움
+    cur.execute("""
+        UPDATE inventory SET item_code = item_name
+        WHERE item_code IS NULL OR item_code = ''
+    """)
+    print(f"  🔧 inventory.item_code NULL → item_name 으로 보정: {cur.rowcount}건")
 
-# ── payment_schedule ──────────────
-add_column(c, "payment_schedule", "ti_number", "TEXT")
-add_column(c, "payment_schedule", "supplier_name", "TEXT")
+    # ── 2) stock_movements.item_code ──────────────────────
+    print("\n[stock_movements]")
+    add_col(cur, "stock_movements", "item_code",  "VARCHAR(100)")
+    add_col(cur, "stock_movements", "warehouse",  "VARCHAR(100)")
+    add_col(cur, "stock_movements", "lot_number", "VARCHAR(100)")
 
-# ── materials ──────────────
-add_column(c, "materials", "min_stock", "INTEGER DEFAULT 0")
-add_column(c, "materials", "lead_time_days", "INTEGER DEFAULT 7")
-add_column(c, "materials", "mat_status", "TEXT DEFAULT '활성'")
+    # item_code NULL → item_name 보정
+    cur.execute("""
+        UPDATE stock_movements SET item_code = item_name
+        WHERE item_code IS NULL OR item_code = ''
+    """)
+    print(f"  🔧 stock_movements.item_code NULL → item_name 으로 보정: {cur.rowcount}건")
 
-# ── purchase_orders ──────────────
-add_column(c, "purchase_orders", "delivery_date", "TEXT")
-add_column(c, "purchase_orders", "warehouse", "TEXT")
+    # ── 3) moving_avg_price ───────────────────────────────
+    print("\n[moving_avg_price]")
+    add_col(cur, "moving_avg_price", "item_code", "VARCHAR(100)")
 
-# ── goods_receipts ──────────────
-add_column(c, "goods_receipts", "bin_code", "TEXT")
-add_column(c, "goods_receipts", "lot_number", "TEXT")
+    cur.execute("""
+        UPDATE moving_avg_price SET item_code = item_name
+        WHERE item_code IS NULL OR item_code = ''
+    """)
+    print(f"  🔧 moving_avg_price.item_code NULL → item_name 으로 보정: {cur.rowcount}건")
 
-# ── 신규 테이블 ──────────────
-c.execute('''CREATE TABLE IF NOT EXISTS alternative_materials (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    material_id INTEGER, alt_material_code TEXT, alt_material_name TEXT,
-    conversion_factor REAL DEFAULT 1.0, priority INTEGER DEFAULT 1, note TEXT,
-    created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS return_to_vendor (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    rtv_number TEXT UNIQUE NOT NULL, gr_id INTEGER, po_id INTEGER, supplier_id INTEGER,
-    item_name TEXT NOT NULL, return_qty INTEGER NOT NULL,
-    reason TEXT, defect_type TEXT, return_type TEXT DEFAULT '반품',
-    credit_note_amount REAL DEFAULT 0, status TEXT DEFAULT '반품요청',
-    approved_by TEXT, note TEXT,
-    created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS moving_avg_price (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_code TEXT NOT NULL, item_name TEXT NOT NULL,
-    prev_qty INTEGER DEFAULT 0, prev_avg_price REAL DEFAULT 0,
-    incoming_qty INTEGER NOT NULL, incoming_price REAL NOT NULL,
-    new_qty INTEGER NOT NULL, new_avg_price REAL NOT NULL,
-    reference TEXT, calculated_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS blanket_orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    blanket_number TEXT UNIQUE NOT NULL, supplier_id INTEGER,
-    item_name TEXT NOT NULL, total_limit_amount REAL NOT NULL,
-    used_amount REAL DEFAULT 0, remaining_amount REAL NOT NULL,
-    currency TEXT DEFAULT 'KRW', unit_price REAL DEFAULT 0,
-    start_date TEXT, end_date TEXT, status TEXT DEFAULT '유효', note TEXT,
-    created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS blanket_order_releases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    blanket_id INTEGER, po_id INTEGER,
-    release_qty INTEGER NOT NULL, release_amount REAL NOT NULL,
-    release_date TEXT, created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS purchase_approvals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    approval_number TEXT UNIQUE NOT NULL, pr_id INTEGER,
-    title TEXT NOT NULL, requester TEXT NOT NULL, department TEXT,
-    item_name TEXT NOT NULL, quantity INTEGER NOT NULL,
-    estimated_amount REAL DEFAULT 0, reason TEXT,
-    contract_type TEXT DEFAULT '경쟁입찰', sole_source_reason TEXT,
-    step1_approver TEXT, step1_status TEXT DEFAULT '대기', step1_comment TEXT, step1_at TEXT,
-    step2_approver TEXT, step2_status TEXT DEFAULT '대기', step2_comment TEXT, step2_at TEXT,
-    step3_approver TEXT, step3_status TEXT DEFAULT '대기', step3_comment TEXT, step3_at TEXT,
-    final_status TEXT DEFAULT '검토중',
-    created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS po_change_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    po_id INTEGER, po_number TEXT,
-    changed_field TEXT, old_value TEXT, new_value TEXT,
-    changed_by TEXT, change_reason TEXT,
-    changed_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS po_receipt_summary (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    po_id INTEGER UNIQUE NOT NULL,
-    ordered_qty INTEGER NOT NULL,
-    received_qty INTEGER DEFAULT 0,
-    remaining_qty INTEGER NOT NULL,
-    last_gr_date TEXT,
-    updated_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
-c.execute('''CREATE TABLE IF NOT EXISTS purchase_info_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pir_number TEXT, supplier_id INTEGER, material_id INTEGER,
-    item_name TEXT, unit_price REAL, currency TEXT DEFAULT 'KRW',
-    min_order_qty INTEGER DEFAULT 1, lead_time_days INTEGER DEFAULT 7,
-    discount_rate REAL DEFAULT 0, price_unit INTEGER DEFAULT 1,
-    valid_from TEXT, valid_to TEXT, memo TEXT, status TEXT DEFAULT '유효',
-    created_at TEXT DEFAULT (datetime('now','localtime'))
-)''')
+    # ── 4) 인덱스 추가 (없으면) ──────────────────────────
+    print("\n[인덱스]")
+    def add_index(table, idx_name, col):
+        try:
+            cur.execute(f"CREATE INDEX `{idx_name}` ON `{table}`(`{col}`)")
+            print(f"  ✅ INDEX {idx_name} 추가")
+        except pymysql.err.OperationalError as e:
+            if "Duplicate key name" in str(e):
+                print(f"  ↩️  INDEX {idx_name} — 이미 존재")
+            else:
+                print(f"  ⚠️  {e}")
 
-conn.commit()
-conn.close()
-print("\n✅ DB 마이그레이션 완료!")
+    add_index("inventory",        "idx_inv_item_code",  "item_code")
+    add_index("stock_movements",  "idx_sm_item_code",   "item_code")
+    add_index("moving_avg_price", "idx_map_item_code",  "item_code")
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print("\n" + "=" * 55)
+    print("✅ 마이그레이션 완료!")
+    print("=" * 55)
+
+if __name__ == "__main__":
+    main()

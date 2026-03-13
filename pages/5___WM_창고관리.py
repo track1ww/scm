@@ -771,12 +771,52 @@ with tabs["lot"]:
             if st.form_submit_button("✅ 등록", use_container_width=True):
                 try:
                     conn = get_db()
-                    conn.execute("""UPDATE inventory SET lot_number=?, expiry_date=?, serial_number=?
-                        WHERE item_name=?""", (lot_n, str(exp_d), ser_n, li))
-                    conn.execute("""INSERT INTO stock_movements(movement_number,item_code,item_name,movement_type,quantity,warehouse,lot_number)
-                        VALUES(?,?,?,?,?,?,?)""", (gen_number("LOT"), li, li, "LOT등록", lot_qty, wh_lot, lot_n))
-                    conn.commit(); conn.close(); st.success("등록!"); st.rerun()
-                except Exception as e: st.error(f"오류:{e}")
+                    # inventory: lot_number / expiry_date / serial_number 업데이트
+                    # Unknown column 오류 시 ALTER TABLE로 컬럼 자동 추가
+                    try:
+                        conn.execute("""UPDATE inventory
+                            SET lot_number=?, expiry_date=?, serial_number=?
+                            WHERE item_name=?""",
+                            (lot_n or None, str(exp_d) if exp_d else None, ser_n or None, li))
+                    except Exception as _e1:
+                        if "Unknown column" in str(_e1):
+                            for _col, _def in [("lot_number","VARCHAR(100)"),
+                                               ("expiry_date","DATE"),
+                                               ("serial_number","VARCHAR(100)")]:
+                                try:
+                                    conn.execute(f"ALTER TABLE inventory ADD COLUMN {_col} {_def}")
+                                except Exception:
+                                    pass
+                            conn.execute("""UPDATE inventory
+                                SET lot_number=?, expiry_date=?, serial_number=?
+                                WHERE item_name=?""",
+                                (lot_n or None, str(exp_d) if exp_d else None, ser_n or None, li))
+                        else:
+                            raise _e1
+                    # stock_movements: item_code 없는 환경 대응
+                    try:
+                        conn.execute("""INSERT INTO stock_movements
+                            (movement_number,item_code,item_name,movement_type,quantity,warehouse,lot_number)
+                            VALUES(?,?,?,?,?,?,?)""",
+                            (gen_number("LOT"), li, li, "LOT등록", lot_qty, wh_lot, lot_n or None))
+                    except Exception as _e2:
+                        if "Unknown column" in str(_e2):
+                            for _col, _def in [("item_code","VARCHAR(100)"),
+                                               ("warehouse","VARCHAR(100)"),
+                                               ("lot_number","VARCHAR(100)")]:
+                                try:
+                                    conn.execute(f"ALTER TABLE stock_movements ADD COLUMN {_col} {_def}")
+                                except Exception:
+                                    pass
+                            conn.execute("""INSERT INTO stock_movements
+                                (movement_number,item_code,item_name,movement_type,quantity,warehouse,lot_number)
+                                VALUES(?,?,?,?,?,?,?)""",
+                                (gen_number("LOT"), li, li, "LOT등록", lot_qty, wh_lot, lot_n or None))
+                        else:
+                            raise _e2
+                    conn.commit(); conn.close(); st.success("✅ LOT 등록 완료!"); st.rerun()
+                except Exception as e:
+                    st.error(f"오류: {e}")
     with col_list:
         st.subheader("LOT / 유통기한 현황")
         conn = get_db()
@@ -790,13 +830,22 @@ with tabs["lot"]:
         conn.close()
         if df_lot.empty: st.info("LOT 등록 없음")
         else:
-            today_s = datetime.now().strftime("%Y-%m-%d")
-            d30 = (datetime.now()+timedelta(days=30)).strftime("%Y-%m-%d")
-            exp_soon = df_lot[df_lot['유통기한'] <= d30]
+            import datetime as _dt
+            _today = _dt.date.today()
+            _d30   = _today + _dt.timedelta(days=30)
+            # 유통기한 컬럼을 datetime.date로 통일 (str / date / NaT 혼재 대응)
+            def _to_date(v):
+                if isinstance(v, _dt.date): return v
+                try: return _dt.date.fromisoformat(str(v)[:10])
+                except: return None
+            df_lot['_exp_d'] = df_lot['유통기한'].apply(_to_date)
+            exp_soon = df_lot[df_lot['_exp_d'].apply(lambda v: v is not None and v <= _d30)]
             if not exp_soon.empty: st.error(f"⚠️ 30일 내 유통기한 만료: {len(exp_soon)}개")
             def lot_color(r):
-                if str(r['유통기한']) < today_s: return ['background-color:#fee2e2']*len(r)
-                if str(r['유통기한']) <= d30: return ['background-color:#fef9c3']*len(r)
+                v = r['_exp_d']
+                if v is None: return ['']*len(r)
+                if v < _today: return ['background-color:#fee2e2']*len(r)
+                if v <= _d30:  return ['background-color:#fef9c3']*len(r)
                 return ['']*len(r)
             st.dataframe(df_lot.style.apply(lot_color, axis=1), use_container_width=True, hide_index=True)
 
@@ -1043,10 +1092,18 @@ with tabs["bi"]:
                        ON i.item_code=m.item_code
                 WHERE i.stock_qty>0 ORDER BY 재고금액 DESC LIMIT 10""", conn)
             if not df_top.empty:
-                fig = px.bar(df_top, y='품목', x='재고금액', orientation='h',
-                             color='재고금액', color_continuous_scale='Teal',
-                             title="재고금액 TOP10")
-                fig.update_layout(height=320, margin=dict(l=0,r=0,t=40,b=0), showlegend=False)
+                import plotly.graph_objects as _go_wm
+                _colors_top = ['#0d9488','#14b8a6','#2dd4bf','#5eead4','#99f6e4',
+                               '#ccfbf1','#a7f3d0','#6ee7b7','#34d399','#10b981'][:len(df_top)]
+                fig = _go_wm.Figure(_go_wm.Bar(
+                    y=df_top['품목'], x=df_top['재고금액'],
+                    orientation='h', marker_color=_colors_top,
+                    text=df_top['재고금액'].apply(lambda v: f"₩{v:,.0f}"),
+                    textposition='outside',
+                ))
+                fig.update_layout(title="재고금액 TOP10", height=320,
+                                  margin=dict(l=0,r=0,t=40,b=0), showlegend=False,
+                                  yaxis=dict(autorange='reversed'))
                 st.plotly_chart(fig, use_container_width=True)
 
         with col_r:
@@ -1107,9 +1164,22 @@ with tabs["bi"]:
             GROUP BY g.item_name, i.stock_qty HAVING COALESCE(i.stock_qty,0)>0
             ORDER BY 회전율 DESC LIMIT 15""", conn)
         if not df_turn.empty:
-            fig4 = px.bar(df_turn, x='품목', y='회전율',
-                          color='회전율', color_continuous_scale='RdYlGn',
-                          title="품목별 재고 회전율 (최근 90일)")
+            _vals = df_turn['회전율'].values
+            _max_v = max(_vals.max(), 1e-9)
+            # 회전율 높을수록 초록, 낮을수록 빨강 (RdYlGn 수동 근사)
+            def _ryg(v):
+                r = max(0, min(255, int(255 * (1 - v/_max_v))))
+                g = max(0, min(255, int(200 * (v/_max_v))))
+                return f'rgb({r},{g},60)'
+            fig4 = _go_wm.Figure(_go_wm.Bar(
+                x=df_turn['품목'], y=df_turn['회전율'],
+                marker_color=[_ryg(v) for v in _vals],
+                text=[f"{v:.1f}" for v in _vals],
+                textposition='outside',
+            ))
+            fig4.update_layout(title="품목별 재고 회전율 (최근 90일)",
+                               height=300, margin=dict(l=0,r=0,t=40,b=0),
+                               xaxis_tickangle=-30, showlegend=False)
             fig4.add_hline(y=df_turn['회전율'].mean(), line_dash="dash",
                            line_color="blue", annotation_text="평균")
             fig4.update_layout(height=300, margin=dict(l=0,r=0,t=40,b=0),
