@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite dev)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "C:\\Users\\yuns\\scm2-frontend"],
+      "port": 5173
+    },
+    {
+      "name": "Backend (Daphne ASGI — HTTP + WebSocket)",
+      "runtimeExecutable": "daphne",
+      "runtimeArgs": ["-b", "0.0.0.0", "-p", "8000", "config.asgi:application"],
+      "port": 8000
+    },
+    {
+      "name": "Backend (Django runserver — HTTP only)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["manage.py", "runserver", "8000"],
+      "port": 8000
+    }
+  ]
+}
