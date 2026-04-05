@@ -29,6 +29,31 @@ class BomLine(models.Model):
         return f"{self.bom.bom_code} - {self.material_name}"
 
 
+class WorkCenterCost(models.Model):
+    """작업장별 시간당 원가 (공정비 + 인건비 표준단가)"""
+    company         = models.ForeignKey(Company, on_delete=models.CASCADE)
+    work_center     = models.CharField(max_length=100)
+    machine_rate    = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                          help_text='시간당 기계/공정비 (원)')
+    labor_rate      = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                          help_text='시간당 인건비 표준단가 (원)')
+    overhead_rate   = models.DecimalField(max_digits=12, decimal_places=2, default=0,
+                                          help_text='시간당 간접비 (원)')
+    effective_from  = models.DateField()
+    effective_to    = models.DateField(null=True, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-effective_from']
+
+    def __str__(self):
+        return f"{self.work_center} ({self.effective_from})"
+
+    @property
+    def total_rate(self):
+        return self.machine_rate + self.labor_rate + self.overhead_rate
+
+
 class ProductionOrder(models.Model):
     """생산오더"""
     STATUS = [
@@ -49,6 +74,20 @@ class ProductionOrder(models.Model):
     actual_start   = models.DateField(null=True, blank=True)
     actual_end     = models.DateField(null=True, blank=True)
     work_center    = models.CharField(max_length=100, blank=True)
+    # ── 원가 정밀화 필드 ──────────────────────────────────────────────
+    planned_hours  = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                                         help_text='계획 작업시간 (시간)')
+    actual_hours   = models.DecimalField(max_digits=8, decimal_places=2, default=0,
+                                         help_text='실제 작업시간 (시간)')
+    material_cost  = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         help_text='자재원가 합계 (자동계산)')
+    process_cost   = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         help_text='공정비 (기계비+간접비) 합계')
+    labor_cost     = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         help_text='인건비 합계')
+    total_cost     = models.DecimalField(max_digits=15, decimal_places=2, default=0,
+                                         help_text='총원가 = 자재+공정+인건비')
+    # ─────────────────────────────────────────────────────────────────
     note           = models.TextField(blank=True)
     created_at     = models.DateTimeField(auto_now_add=True)
 

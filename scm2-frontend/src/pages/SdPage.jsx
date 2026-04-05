@@ -109,10 +109,10 @@ function FormPanel({ title, onSubmit, onCancel, isEditMode, isPending, children 
 }
 
 // ─── 폼 필드 공통 ─────────────────────────────────────────────
-function Field({ label, children }) {
+function Field({ label, htmlFor, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, color: '#6b6b6b', display: 'block', marginBottom: 4 }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ fontSize: 12, color: '#6b6b6b', display: 'block', marginBottom: 4 }}>{label}</label>
       {children}
     </div>
   )
@@ -345,32 +345,40 @@ function CustomerTab() {
           onCancel={handleCancel}
           isPending={isPending}
         >
-          <Field label="고객코드 *">
+          <Field label="고객코드 *" htmlFor="sd-customer-customer-code">
             <input
+              id="sd-customer-customer-code"
+              name="customer_code"
               style={inputStyle}
               value={form.customer_code}
               onChange={e => setForm(f => ({ ...f, customer_code: e.target.value }))}
               placeholder="예: CUST-001"
             />
           </Field>
-          <Field label="고객명 *">
+          <Field label="고객명 *" htmlFor="sd-customer-customer-name">
             <input
+              id="sd-customer-customer-name"
+              name="customer_name"
               style={inputStyle}
               value={form.customer_name}
               onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))}
               placeholder="고객 회사명"
             />
           </Field>
-          <Field label="연락처">
+          <Field label="연락처" htmlFor="sd-customer-contact">
             <input
+              id="sd-customer-contact"
+              name="contact"
               style={inputStyle}
               value={form.contact}
               onChange={e => setForm(f => ({ ...f, contact: e.target.value }))}
               placeholder="연락처를 입력하세요"
             />
           </Field>
-          <Field label="이메일">
+          <Field label="이메일" htmlFor="sd-customer-email">
             <input
+              id="sd-customer-email"
+              name="email"
               style={inputStyle}
               type="email"
               value={form.email}
@@ -378,8 +386,10 @@ function CustomerTab() {
               placeholder="이메일을 입력하세요"
             />
           </Field>
-          <Field label="여신한도 (원)">
+          <Field label="여신한도 (원)" htmlFor="sd-customer-credit-limit">
             <input
+              id="sd-customer-credit-limit"
+              name="credit_limit"
               style={inputStyle}
               type="number"
               value={form.credit_limit}
@@ -387,8 +397,10 @@ function CustomerTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="결제조건">
+          <Field label="결제조건" htmlFor="sd-customer-payment-terms">
             <select
+              id="sd-customer-payment-terms"
+              name="payment_terms"
               style={selectStyle}
               value={form.payment_terms}
               onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}
@@ -572,8 +584,10 @@ function SalesOrderTab() {
           onSubmit={handleSubmit}
           isPending={createMut.isPending}
         >
-          <Field label="고객 *">
+          <Field label="고객 *" htmlFor="sd-order-customer">
             <select
+              id="sd-order-customer"
+              name="customer"
               style={selectStyle}
               value={form.customer}
               onChange={e => setForm(f => ({ ...f, customer: e.target.value }))}
@@ -587,16 +601,20 @@ function SalesOrderTab() {
               ))}
             </select>
           </Field>
-          <Field label="품목명 *">
+          <Field label="품목명 *" htmlFor="sd-order-item-name">
             <input
+              id="sd-order-item-name"
+              name="item_name"
               style={inputStyle}
               value={form.item_name}
               onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))}
               placeholder="품목명을 입력하세요"
             />
           </Field>
-          <Field label="수량 *">
+          <Field label="수량 *" htmlFor="sd-order-quantity">
             <input
+              id="sd-order-quantity"
+              name="quantity"
               style={inputStyle}
               type="number"
               value={form.quantity}
@@ -604,8 +622,10 @@ function SalesOrderTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="단가 (원)">
+          <Field label="단가 (원)" htmlFor="sd-order-unit-price">
             <input
+              id="sd-order-unit-price"
+              name="unit_price"
               style={inputStyle}
               type="number"
               value={form.unit_price}
@@ -613,8 +633,10 @@ function SalesOrderTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="할인율 (0~100%)">
+          <Field label="할인율 (0~100%)" htmlFor="sd-order-discount-rate">
             <input
+              id="sd-order-discount-rate"
+              name="discount_rate"
               style={inputStyle}
               type="number"
               min="0"
@@ -624,8 +646,10 @@ function SalesOrderTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="납기일">
+          <Field label="납기일" htmlFor="sd-order-expected-date">
             <input
+              id="sd-order-expected-date"
+              name="expected_date"
               style={inputStyle}
               type="date"
               value={form.expected_date}
@@ -675,8 +699,10 @@ function SalesOrderTab() {
                         </button>
                       </div>
                       <div style={{ marginBottom: 6 }}>
-                        <label style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>품목명</label>
+                        <label htmlFor={`sd-order-line-item-name-${idx}`} style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>품목명</label>
                         <input
+                          id={`sd-order-line-item-name-${idx}`}
+                          name="item_name"
                           style={lineInputSm}
                           value={line.item_name}
                           onChange={e => handleLineChange(idx, 'item_name', e.target.value)}
@@ -685,8 +711,10 @@ function SalesOrderTab() {
                       </div>
                       <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>수량</label>
+                          <label htmlFor={`sd-order-line-quantity-${idx}`} style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>수량</label>
                           <input
+                            id={`sd-order-line-quantity-${idx}`}
+                            name="quantity"
                             style={lineInputSm}
                             type="number"
                             min={0}
@@ -696,8 +724,10 @@ function SalesOrderTab() {
                           />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>단가 (원)</label>
+                          <label htmlFor={`sd-order-line-unit-price-${idx}`} style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>단가 (원)</label>
                           <input
+                            id={`sd-order-line-unit-price-${idx}`}
+                            name="unit_price"
                             style={lineInputSm}
                             type="number"
                             min={0}
@@ -707,8 +737,10 @@ function SalesOrderTab() {
                           />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>할인율 (%)</label>
+                          <label htmlFor={`sd-order-line-discount-rate-${idx}`} style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>할인율 (%)</label>
                           <input
+                            id={`sd-order-line-discount-rate-${idx}`}
+                            name="discount_rate"
                             style={lineInputSm}
                             type="number"
                             min={0}
@@ -719,8 +751,10 @@ function SalesOrderTab() {
                           />
                         </div>
                         <div>
-                          <label style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>납기일</label>
+                          <label htmlFor={`sd-order-line-expected-date-${idx}`} style={{ display: 'block', fontSize: 11, color: '#9b9b9b', marginBottom: 2 }}>납기일</label>
                           <input
+                            id={`sd-order-line-expected-date-${idx}`}
+                            name="expected_date"
                             style={lineInputSm}
                             type="date"
                             value={line.expected_date}
@@ -820,7 +854,7 @@ function DeliveryTab() {
   })
   const { data: confirmedOrdersData } = useQuery({
     queryKey: ['sd-orders-confirmed'],
-    queryFn: () => api.get('/sd/orders/?status=confirmed').then(r => r.data),
+    queryFn: () => api.get('/sd/orders/?status=주문접수').then(r => r.data),
   })
 
   const rows            = getList(data)
@@ -883,8 +917,10 @@ function DeliveryTab() {
           onSubmit={handleSubmit}
           isPending={createMut.isPending}
         >
-          <Field label="수주 선택 * (confirmed 주문)">
+          <Field label="수주 선택 * (confirmed 주문)" htmlFor="sd-delivery-order">
             <select
+              id="sd-delivery-order"
+              name="order"
               style={selectStyle}
               value={form.order}
               onChange={e => setForm(f => ({ ...f, order: e.target.value }))}
@@ -897,8 +933,10 @@ function DeliveryTab() {
               ))}
             </select>
           </Field>
-          <Field label="출하수량 *">
+          <Field label="출하수량 *" htmlFor="sd-delivery-qty">
             <input
+              id="sd-delivery-qty"
+              name="delivery_qty"
               style={inputStyle}
               type="number"
               value={form.delivery_qty}
@@ -906,24 +944,30 @@ function DeliveryTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="운송사">
+          <Field label="운송사" htmlFor="sd-delivery-carrier">
             <input
+              id="sd-delivery-carrier"
+              name="carrier"
               style={inputStyle}
               value={form.carrier}
               onChange={e => setForm(f => ({ ...f, carrier: e.target.value }))}
               placeholder="운송사명"
             />
           </Field>
-          <Field label="운송장 번호">
+          <Field label="운송장 번호" htmlFor="sd-delivery-tracking-number">
             <input
+              id="sd-delivery-tracking-number"
+              name="tracking_number"
               style={inputStyle}
               value={form.tracking_number}
               onChange={e => setForm(f => ({ ...f, tracking_number: e.target.value }))}
               placeholder="운송장 번호"
             />
           </Field>
-          <Field label="출하일">
+          <Field label="출하일" htmlFor="sd-delivery-date">
             <input
+              id="sd-delivery-date"
+              name="delivery_date"
               style={inputStyle}
               type="date"
               value={form.delivery_date}

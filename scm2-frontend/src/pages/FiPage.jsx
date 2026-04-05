@@ -253,20 +253,20 @@ function AccountTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>계정코드 *</label>
-          <input style={S.input} value={form.account_code}
+          <label htmlFor="fi-account-code" style={S.label}>계정코드 *</label>
+          <input id="fi-account-code" name="account_code" style={S.input} value={form.account_code}
             onChange={e => setForm(f => ({ ...f, account_code: e.target.value }))}
             placeholder="예: 1001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계정명 *</label>
-          <input style={S.input} value={form.account_name}
+          <label htmlFor="fi-account-name" style={S.label}>계정명 *</label>
+          <input id="fi-account-name" name="account_name" style={S.input} value={form.account_name}
             onChange={e => setForm(f => ({ ...f, account_name: e.target.value }))}
             placeholder="예: 현금" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계정유형</label>
-          <select style={S.input} value={form.account_type}
+          <label htmlFor="fi-account-type" style={S.label}>계정유형</label>
+          <select id="fi-account-type" name="account_type" style={S.input} value={form.account_type}
             onChange={e => setForm(f => ({ ...f, account_type: e.target.value }))}>
             <option value="ASSET">ASSET (자산)</option>
             <option value="LIABILITY">LIABILITY (부채)</option>
@@ -384,8 +384,8 @@ function MoveTab() {
       }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#1a1a1a' }}>신규 등록</div>
         <div style={S.formRow}>
-          <label style={S.label}>전표유형</label>
-          <select style={S.input} value={form.move_type}
+          <label htmlFor="fi-journal-move-type" style={S.label}>전표유형</label>
+          <select id="fi-journal-move-type" name="move_type" style={S.input} value={form.move_type}
             onChange={e => setForm(f => ({ ...f, move_type: e.target.value }))}>
             <option value="GENERAL">GENERAL (일반)</option>
             <option value="PURCHASE">PURCHASE (매입)</option>
@@ -395,13 +395,13 @@ function MoveTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>전기일</label>
-          <input style={S.input} type="date" value={form.posting_date}
+          <label htmlFor="fi-journal-posting-date" style={S.label}>전기일</label>
+          <input id="fi-journal-posting-date" name="posting_date" style={S.input} type="date" value={form.posting_date}
             onChange={e => setForm(f => ({ ...f, posting_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>설명</label>
-          <input style={S.input} value={form.description}
+          <label htmlFor="fi-journal-description" style={S.label}>설명</label>
+          <input id="fi-journal-description" name="description" style={S.input} value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             placeholder="전표 설명" />
         </div>
@@ -424,8 +424,10 @@ function MoveTab() {
               marginBottom: 6, background: '#fafafa',
             }}>
               <div style={{ marginBottom: 4 }}>
-                <label style={{ ...S.label, fontSize: 11 }}>계정과목</label>
+                <label htmlFor={`fi-journal-line-account-${idx}`} style={{ ...S.label, fontSize: 11 }}>계정과목</label>
                 <select
+                  id={`fi-journal-line-account-${idx}`}
+                  name="account"
                   style={{ ...S.input, fontSize: 12, padding: '5px 8px' }}
                   value={line.account}
                   onChange={e => updateLine(idx, 'account', e.target.value)}
@@ -438,16 +440,20 @@ function MoveTab() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 4, alignItems: 'end' }}>
                 <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>차변</label>
+                  <label htmlFor={`fi-journal-line-debit-${idx}`} style={{ ...S.label, fontSize: 11 }}>차변</label>
                   <input
+                    id={`fi-journal-line-debit-${idx}`}
+                    name="debit_amount"
                     style={{ ...S.input, fontSize: 12, padding: '5px 8px' }}
                     type="number" value={line.debit_amount} placeholder="0"
                     onChange={e => updateLine(idx, 'debit_amount', e.target.value)}
                   />
                 </div>
                 <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>대변</label>
+                  <label htmlFor={`fi-journal-line-credit-${idx}`} style={{ ...S.label, fontSize: 11 }}>대변</label>
                   <input
+                    id={`fi-journal-line-credit-${idx}`}
+                    name="credit_amount"
                     style={{ ...S.input, fontSize: 12, padding: '5px 8px' }}
                     type="number" value={line.credit_amount} placeholder="0"
                     onChange={e => updateLine(idx, 'credit_amount', e.target.value)}
@@ -573,40 +579,42 @@ function TaxInvoiceTab() {
         isPending={createMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>구분</label>
-          <select style={S.input} value={form.invoice_type}
+          <label htmlFor="fi-tax-invoice-type" style={S.label}>구분</label>
+          <select id="fi-tax-invoice-type" name="invoice_type" style={S.input} value={form.invoice_type}
             onChange={e => setForm(f => ({ ...f, invoice_type: e.target.value }))}>
             <option value="SALE">SALE (매출)</option>
             <option value="PURCHASE">PURCHASE (매입)</option>
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>발행일</label>
-          <input style={S.input} type="date" value={form.invoice_date}
+          <label htmlFor="fi-tax-invoice-date" style={S.label}>발행일</label>
+          <input id="fi-tax-invoice-date" name="invoice_date" style={S.input} type="date" value={form.invoice_date}
             onChange={e => setForm(f => ({ ...f, invoice_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>거래처명 *</label>
-          <input style={S.input} value={form.counterpart_name}
+          <label htmlFor="fi-tax-counterpart-name" style={S.label}>거래처명 *</label>
+          <input id="fi-tax-counterpart-name" name="counterpart_name" style={S.input} value={form.counterpart_name}
             onChange={e => setForm(f => ({ ...f, counterpart_name: e.target.value }))}
             placeholder="거래처 이름" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>사업자등록번호</label>
-          <input style={S.input} value={form.counterpart_reg_no}
+          <label htmlFor="fi-tax-counterpart-reg-no" style={S.label}>사업자등록번호</label>
+          <input id="fi-tax-counterpart-reg-no" name="counterpart_reg_no" style={S.input} value={form.counterpart_reg_no}
             onChange={e => setForm(f => ({ ...f, counterpart_reg_no: e.target.value }))}
             placeholder="000-00-00000" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>공급가액 *</label>
-          <input style={S.input} type="number" value={form.supply_amount}
+          <label htmlFor="fi-tax-supply-amount" style={S.label}>공급가액 *</label>
+          <input id="fi-tax-supply-amount" name="supply_amount" style={S.input} type="number" value={form.supply_amount}
             onChange={e => setForm(f => ({ ...f, supply_amount: e.target.value }))}
             onBlur={handleSupplyBlur}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>세액 (공급가액 × 10% 자동계산)</label>
+          <label htmlFor="fi-tax-tax-amount" style={S.label}>세액 (공급가액 × 10% 자동계산)</label>
           <input
+            id="fi-tax-tax-amount"
+            name="tax_amount"
             style={{ ...S.input, background: '#f9f9f7', color: '#6b6b6b' }}
             type="number" value={form.tax_amount}
             readOnly placeholder="자동계산" />
@@ -832,22 +840,22 @@ function BudgetTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>예산연도 *</label>
-          <input style={S.input} type="number" value={form.budget_year}
+          <label htmlFor="fi-budget-year" style={S.label}>예산연도 *</label>
+          <input id="fi-budget-year" name="budget_year" style={S.input} type="number" value={form.budget_year}
             onChange={e => setForm(f => ({ ...f, budget_year: e.target.value }))}
             placeholder="예: 2026" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>예산월 *</label>
-          <select style={S.input} value={form.budget_month}
+          <label htmlFor="fi-budget-month" style={S.label}>예산월 *</label>
+          <select id="fi-budget-month" name="budget_month" style={S.input} value={form.budget_month}
             onChange={e => setForm(f => ({ ...f, budget_month: e.target.value }))}>
             <option value="">-- 월 선택 --</option>
             {months.map(m => <option key={m} value={m}>{m}월</option>)}
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계정 *</label>
-          <select style={S.input} value={form.account}
+          <label htmlFor="fi-budget-account" style={S.label}>계정 *</label>
+          <select id="fi-budget-account" name="account" style={S.input} value={form.account}
             onChange={e => setForm(f => ({ ...f, account: e.target.value }))}>
             <option value="">-- 계정 선택 --</option>
             {accounts.map(a => (
@@ -856,14 +864,14 @@ function BudgetTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>예산금액 *</label>
-          <input style={S.input} type="number" value={form.budget_amount}
+          <label htmlFor="fi-budget-amount" style={S.label}>예산금액 *</label>
+          <input id="fi-budget-amount" name="budget_amount" style={S.input} type="number" value={form.budget_amount}
             onChange={e => setForm(f => ({ ...f, budget_amount: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>비고</label>
-          <input style={S.input} value={form.note}
+          <label htmlFor="fi-budget-note" style={S.label}>비고</label>
+          <input id="fi-budget-note" name="note" style={S.input} value={form.note}
             onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
             placeholder="메모" />
         </div>
@@ -1022,20 +1030,20 @@ function FixedAssetTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>자산코드 *</label>
-          <input style={S.input} value={form.asset_code}
+          <label htmlFor="fi-asset-code" style={S.label}>자산코드 *</label>
+          <input id="fi-asset-code" name="asset_code" style={S.input} value={form.asset_code}
             onChange={e => setForm(f => ({ ...f, asset_code: e.target.value }))}
             placeholder="예: FA-001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>자산명 *</label>
-          <input style={S.input} value={form.asset_name}
+          <label htmlFor="fi-asset-name" style={S.label}>자산명 *</label>
+          <input id="fi-asset-name" name="asset_name" style={S.input} value={form.asset_name}
             onChange={e => setForm(f => ({ ...f, asset_name: e.target.value }))}
             placeholder="예: CNC 가공기" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>분류</label>
-          <select style={S.input} value={form.category}
+          <label htmlFor="fi-asset-category" style={S.label}>분류</label>
+          <select id="fi-asset-category" name="category" style={S.input} value={form.category}
             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
             <option value="기계">기계</option>
             <option value="차량">차량</option>
@@ -1045,31 +1053,31 @@ function FixedAssetTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>취득일</label>
-          <input style={S.input} type="date" value={form.acquisition_date}
+          <label htmlFor="fi-asset-acquisition-date" style={S.label}>취득일</label>
+          <input id="fi-asset-acquisition-date" name="acquisition_date" style={S.input} type="date" value={form.acquisition_date}
             onChange={e => setForm(f => ({ ...f, acquisition_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>취득원가 *</label>
-          <input style={S.input} type="number" value={form.acquisition_cost}
+          <label htmlFor="fi-asset-acquisition-cost" style={S.label}>취득원가 *</label>
+          <input id="fi-asset-acquisition-cost" name="acquisition_cost" style={S.input} type="number" value={form.acquisition_cost}
             onChange={e => setForm(f => ({ ...f, acquisition_cost: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>내용연수 (년) *</label>
-          <input style={S.input} type="number" value={form.useful_life}
+          <label htmlFor="fi-asset-useful-life" style={S.label}>내용연수 (년) *</label>
+          <input id="fi-asset-useful-life" name="useful_life" style={S.input} type="number" value={form.useful_life}
             onChange={e => setForm(f => ({ ...f, useful_life: e.target.value }))}
             placeholder="예: 5" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>잔존가치</label>
-          <input style={S.input} type="number" value={form.residual_value}
+          <label htmlFor="fi-asset-residual-value" style={S.label}>잔존가치</label>
+          <input id="fi-asset-residual-value" name="residual_value" style={S.input} type="number" value={form.residual_value}
             onChange={e => setForm(f => ({ ...f, residual_value: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>상각방법</label>
-          <select style={S.input} value={form.depreciation_method}
+          <label htmlFor="fi-asset-depreciation-method" style={S.label}>상각방법</label>
+          <select id="fi-asset-depreciation-method" name="depreciation_method" style={S.input} value={form.depreciation_method}
             onChange={e => setForm(f => ({ ...f, depreciation_method: e.target.value }))}>
             <option value="straight_line">정액법</option>
             <option value="declining_balance">정률법</option>

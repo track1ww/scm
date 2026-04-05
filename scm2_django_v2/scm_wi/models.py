@@ -29,6 +29,39 @@ class WorkInstruction(models.Model):
         return self.wi_number
 
 
+class WorkStandard(models.Model):
+    """
+    작업표준서 (버전 관리)
+
+    동일 standard_code 로 여러 버전을 관리한다.
+    status: draft → active (1개만 유효) → deprecated
+    """
+    STATUS = [
+        ('draft',       '초안'),
+        ('active',      '활성'),
+        ('deprecated',  '폐기'),
+    ]
+    company         = models.ForeignKey(Company, on_delete=models.CASCADE)
+    standard_code   = models.CharField(max_length=50,
+                                        help_text='작업표준 코드 (여러 버전 공유)')
+    work_center     = models.CharField(max_length=100, blank=True)
+    title           = models.CharField(max_length=200)
+    content         = models.TextField(blank=True, help_text='작업 절차 상세')
+    version         = models.CharField(max_length=20, default='1.0')
+    status          = models.CharField(max_length=20, choices=STATUS, default='draft')
+    effective_from  = models.DateField(null=True, blank=True)
+    created_by      = models.CharField(max_length=100, blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('company', 'standard_code', 'version')]
+        ordering        = ['standard_code', '-version']
+
+    def __str__(self):
+        return f"{self.standard_code} v{self.version} [{self.status}]"
+
+
 class WorkResult(models.Model):
     work_instruction = models.ForeignKey(
         WorkInstruction, on_delete=models.CASCADE, related_name='results'

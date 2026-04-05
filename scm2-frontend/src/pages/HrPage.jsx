@@ -241,14 +241,14 @@ function DepartmentTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>부서코드 *</label>
-          <input style={S.input} value={form.dept_code}
+          <label htmlFor="hr-dept-dept-code" style={S.label}>부서코드 *</label>
+          <input id="hr-dept-dept-code" name="dept_code" style={S.input} value={form.dept_code}
             onChange={e => setForm(f => ({ ...f, dept_code: e.target.value }))}
             placeholder="예: D001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>부서명 *</label>
-          <input style={S.input} value={form.dept_name}
+          <label htmlFor="hr-dept-dept-name" style={S.label}>부서명 *</label>
+          <input id="hr-dept-dept-name" name="dept_name" style={S.input} value={form.dept_name}
             onChange={e => setForm(f => ({ ...f, dept_name: e.target.value }))}
             placeholder="예: 개발팀" />
         </div>
@@ -375,34 +375,34 @@ function EmployeeTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>사원코드 *</label>
-          <input style={S.input} value={form.emp_code}
+          <label htmlFor="hr-emp-emp-code" style={S.label}>사원코드 *</label>
+          <input id="hr-emp-emp-code" name="emp_code" style={S.input} value={form.emp_code}
             onChange={e => setForm(f => ({ ...f, emp_code: e.target.value }))}
             placeholder="예: E001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>이름 *</label>
-          <input style={S.input} value={form.name}
+          <label htmlFor="hr-emp-name" style={S.label}>이름 *</label>
+          <input id="hr-emp-name" name="name" style={S.input} value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             placeholder="홍길동" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>부서</label>
-          <select style={S.input} value={form.dept}
+          <label htmlFor="hr-emp-dept" style={S.label}>부서</label>
+          <select id="hr-emp-dept" name="dept" style={S.input} value={form.dept}
             onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
             <option value="">-- 선택 --</option>
             {depts.map(d => <option key={d.id} value={d.id}>{d.dept_name}</option>)}
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>직급</label>
-          <input style={S.input} value={form.position}
+          <label htmlFor="hr-emp-position" style={S.label}>직급</label>
+          <input id="hr-emp-position" name="position" style={S.input} value={form.position}
             onChange={e => setForm(f => ({ ...f, position: e.target.value }))}
             placeholder="예: 대리" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>고용형태</label>
-          <select style={S.input} value={form.employment_type}
+          <label htmlFor="hr-emp-employment-type" style={S.label}>고용형태</label>
+          <select id="hr-emp-employment-type" name="employment_type" style={S.input} value={form.employment_type}
             onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}>
             <option value="정규직">정규직</option>
             <option value="계약직">계약직</option>
@@ -410,25 +410,25 @@ function EmployeeTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>입사일</label>
-          <input style={S.input} type="date" value={form.hire_date}
+          <label htmlFor="hr-emp-hire-date" style={S.label}>입사일</label>
+          <input id="hr-emp-hire-date" name="hire_date" style={S.input} type="date" value={form.hire_date}
             onChange={e => setForm(f => ({ ...f, hire_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>기본급</label>
-          <input style={S.input} type="number" value={form.base_salary}
+          <label htmlFor="hr-emp-base-salary" style={S.label}>기본급</label>
+          <input id="hr-emp-base-salary" name="base_salary" style={S.input} type="number" value={form.base_salary}
             onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))}
             placeholder="3000000" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>이메일</label>
-          <input style={S.input} type="email" value={form.email}
+          <label htmlFor="hr-emp-email" style={S.label}>이메일</label>
+          <input id="hr-emp-email" name="email" style={S.input} type="email" value={form.email}
             onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             placeholder="example@company.com" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>전화번호</label>
-          <input style={S.input} value={form.phone}
+          <label htmlFor="hr-emp-phone" style={S.label}>전화번호</label>
+          <input id="hr-emp-phone" name="phone" style={S.input} value={form.phone}
             onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
             placeholder="010-0000-0000" />
         </div>
@@ -520,8 +520,8 @@ function PayrollTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>직원 *</label>
-          <select style={S.input} value={form.employee}
+          <label htmlFor="hr-payroll-employee" style={S.label}>직원 *</label>
+          <select id="hr-payroll-employee" name="employee" style={S.input} value={form.employee}
             onChange={e => setForm(f => ({ ...f, employee: e.target.value }))}>
             <option value="">-- 선택 --</option>
             {employees.map(e => (
@@ -530,42 +530,42 @@ function PayrollTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>년도 *</label>
-          <input style={S.input} type="number" value={form.pay_year} min={2000} max={2099}
+          <label htmlFor="hr-payroll-pay-year" style={S.label}>년도 *</label>
+          <input id="hr-payroll-pay-year" name="pay_year" style={S.input} type="number" value={form.pay_year} min={2000} max={2099}
             onChange={e => setForm(f => ({ ...f, pay_year: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>월 *</label>
-          <input style={S.input} type="number" value={form.pay_month} min={1} max={12}
+          <label htmlFor="hr-payroll-pay-month" style={S.label}>월 *</label>
+          <input id="hr-payroll-pay-month" name="pay_month" style={S.input} type="number" value={form.pay_month} min={1} max={12}
             onChange={e => setForm(f => ({ ...f, pay_month: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>기본급</label>
-          <input style={S.input} type="number" value={form.base_salary}
+          <label htmlFor="hr-payroll-base-salary" style={S.label}>기본급</label>
+          <input id="hr-payroll-base-salary" name="base_salary" style={S.input} type="number" value={form.base_salary}
             onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>연장근로수당</label>
-          <input style={S.input} type="number" value={form.overtime_pay}
+          <label htmlFor="hr-payroll-overtime-pay" style={S.label}>연장근로수당</label>
+          <input id="hr-payroll-overtime-pay" name="overtime_pay" style={S.input} type="number" value={form.overtime_pay}
             onChange={e => setForm(f => ({ ...f, overtime_pay: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>보너스</label>
-          <input style={S.input} type="number" value={form.bonus}
+          <label htmlFor="hr-payroll-bonus" style={S.label}>보너스</label>
+          <input id="hr-payroll-bonus" name="bonus" style={S.input} type="number" value={form.bonus}
             onChange={e => setForm(f => ({ ...f, bonus: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>소득세</label>
-          <input style={S.input} type="number" value={form.income_tax}
+          <label htmlFor="hr-payroll-income-tax" style={S.label}>소득세</label>
+          <input id="hr-payroll-income-tax" name="income_tax" style={S.input} type="number" value={form.income_tax}
             onChange={e => setForm(f => ({ ...f, income_tax: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>실지급액</label>
-          <input style={S.input} type="number" value={form.net_pay}
+          <label htmlFor="hr-payroll-net-pay" style={S.label}>실지급액</label>
+          <input id="hr-payroll-net-pay" name="net_pay" style={S.input} type="number" value={form.net_pay}
             onChange={e => setForm(f => ({ ...f, net_pay: e.target.value }))}
             placeholder="0" />
         </div>
@@ -668,8 +668,8 @@ function AttendanceTab() {
       <div className="flex flex-col md:flex-row gap-4 p-3 md:p-5 items-start">
       <FormPanel editMode={false} onSubmit={handleSubmit} isPending={saveMutation.isPending}>
         <div style={S.formRow}>
-          <label style={S.label}>직원 *</label>
-          <select style={S.input} value={form.employee}
+          <label htmlFor="hr-attend-employee" style={S.label}>직원 *</label>
+          <select id="hr-attend-employee" name="employee" style={S.input} value={form.employee}
             onChange={e => setForm(f => ({ ...f, employee: e.target.value }))}>
             <option value="">-- 선택 --</option>
             {employees.map(emp => (
@@ -678,23 +678,23 @@ function AttendanceTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>근무일자 *</label>
-          <input style={S.input} type="date" value={form.work_date}
+          <label htmlFor="hr-attend-work-date" style={S.label}>근무일자 *</label>
+          <input id="hr-attend-work-date" name="work_date" style={S.input} type="date" value={form.work_date}
             onChange={e => setForm(f => ({ ...f, work_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>출근시간</label>
-          <input style={S.input} type="time" value={form.check_in}
+          <label htmlFor="hr-attend-check-in" style={S.label}>출근시간</label>
+          <input id="hr-attend-check-in" name="check_in" style={S.input} type="time" value={form.check_in}
             onChange={e => setForm(f => ({ ...f, check_in: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>퇴근시간</label>
-          <input style={S.input} type="time" value={form.check_out}
+          <label htmlFor="hr-attend-check-out" style={S.label}>퇴근시간</label>
+          <input id="hr-attend-check-out" name="check_out" style={S.input} type="time" value={form.check_out}
             onChange={e => setForm(f => ({ ...f, check_out: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>근무유형</label>
-          <select style={S.input} value={form.work_type}
+          <label htmlFor="hr-attend-work-type" style={S.label}>근무유형</label>
+          <select id="hr-attend-work-type" name="work_type" style={S.input} value={form.work_type}
             onChange={e => setForm(f => ({ ...f, work_type: e.target.value }))}>
             {ATTENDANCE_WORK_TYPES.map(t => (
               <option key={t} value={t}>{t}</option>
@@ -702,8 +702,8 @@ function AttendanceTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>초과근무시간 (h)</label>
-          <input style={S.input} type="number" min={0} step={0.5} value={form.overtime_hours}
+          <label htmlFor="hr-attend-overtime-hours" style={S.label}>초과근무시간 (h)</label>
+          <input id="hr-attend-overtime-hours" name="overtime_hours" style={S.input} type="number" min={0} step={0.5} value={form.overtime_hours}
             onChange={e => setForm(f => ({ ...f, overtime_hours: e.target.value }))}
             placeholder="0" />
         </div>
@@ -832,8 +832,8 @@ function LeaveTab() {
       <div className="flex flex-col md:flex-row gap-4 p-3 md:p-5 items-start">
       <FormPanel editMode={false} onSubmit={handleSubmit} isPending={saveMutation.isPending}>
         <div style={S.formRow}>
-          <label style={S.label}>직원 *</label>
-          <select style={S.input} value={form.employee}
+          <label htmlFor="hr-leave-employee" style={S.label}>직원 *</label>
+          <select id="hr-leave-employee" name="employee" style={S.input} value={form.employee}
             onChange={e => setForm(f => ({ ...f, employee: e.target.value }))}>
             <option value="">-- 선택 --</option>
             {employees.map(emp => (
@@ -842,8 +842,8 @@ function LeaveTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>휴가유형</label>
-          <select style={S.input} value={form.leave_type}
+          <label htmlFor="hr-leave-leave-type" style={S.label}>휴가유형</label>
+          <select id="hr-leave-leave-type" name="leave_type" style={S.input} value={form.leave_type}
             onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))}>
             {LEAVE_TYPES.map(t => (
               <option key={t} value={t}>{t}</option>
@@ -851,18 +851,20 @@ function LeaveTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>시작일 *</label>
-          <input style={S.input} type="date" value={form.start_date}
+          <label htmlFor="hr-leave-start-date" style={S.label}>시작일 *</label>
+          <input id="hr-leave-start-date" name="start_date" style={S.input} type="date" value={form.start_date}
             onChange={e => handleDateChange('start_date', e.target.value)} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>종료일 *</label>
-          <input style={S.input} type="date" value={form.end_date}
+          <label htmlFor="hr-leave-end-date" style={S.label}>종료일 *</label>
+          <input id="hr-leave-end-date" name="end_date" style={S.input} type="date" value={form.end_date}
             onChange={e => handleDateChange('end_date', e.target.value)} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>일수 (자동계산)</label>
+          <label htmlFor="hr-leave-days" style={S.label}>일수 (자동계산)</label>
           <input
+            id="hr-leave-days"
+            name="days"
             style={{ ...S.input, background: '#f5f5f3', color: '#6b6b6b' }}
             type="number" min={1}
             value={form.days}
@@ -871,8 +873,8 @@ function LeaveTab() {
           />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>사유</label>
-          <input style={S.input} value={form.reason}
+          <label htmlFor="hr-leave-reason" style={S.label}>사유</label>
+          <input id="hr-leave-reason" name="reason" style={S.input} value={form.reason}
             onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
             placeholder="휴가 사유를 입력하세요" />
         </div>

@@ -275,16 +275,16 @@ function InspectionPlanTab() {
         <p style={S.formTitle}>{editId ? '수정' : '신규 등록'}</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>계획코드 *</label>
-            <input style={S.input} value={form.plan_code} onChange={e => set('plan_code', e.target.value)} placeholder="QP-001" />
+            <label htmlFor="qm-plan-code" style={S.label}>계획코드 *</label>
+            <input id="qm-plan-code" name="plan_code" style={S.input} value={form.plan_code} onChange={e => set('plan_code', e.target.value)} placeholder="QP-001" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>계획명 *</label>
-            <input style={S.input} value={form.plan_name} onChange={e => set('plan_name', e.target.value)} placeholder="계획명" />
+            <label htmlFor="qm-plan-name" style={S.label}>계획명 *</label>
+            <input id="qm-plan-name" name="plan_name" style={S.input} value={form.plan_name} onChange={e => set('plan_name', e.target.value)} placeholder="계획명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>검사유형</label>
-            <select style={S.input} value={form.inspection_type} onChange={e => set('inspection_type', e.target.value)}>
+            <label htmlFor="qm-plan-inspection-type" style={S.label}>검사유형</label>
+            <select id="qm-plan-inspection-type" name="inspection_type" style={S.input} value={form.inspection_type} onChange={e => set('inspection_type', e.target.value)}>
               <option value="수입검사">수입검사</option>
               <option value="공정검사">공정검사</option>
               <option value="출하검사">출하검사</option>
@@ -292,12 +292,14 @@ function InspectionPlanTab() {
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>대상품목</label>
-            <input style={S.input} value={form.target_item} onChange={e => set('target_item', e.target.value)} placeholder="대상품목" />
+            <label htmlFor="qm-plan-target-item" style={S.label}>대상품목</label>
+            <input id="qm-plan-target-item" name="target_item" style={S.input} value={form.target_item} onChange={e => set('target_item', e.target.value)} placeholder="대상품목" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>검사기준</label>
+            <label htmlFor="qm-plan-criteria" style={S.label}>검사기준</label>
             <textarea
+              id="qm-plan-criteria"
+              name="criteria"
               style={{ ...S.input, resize: 'vertical', minHeight: 60 }}
               value={form.criteria}
               onChange={e => set('criteria', e.target.value)}
@@ -453,8 +455,8 @@ function InspectionResultTab() {
         <p style={S.formTitle}>신규 등록</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>검사계획</label>
-            <select style={S.input} value={form.plan} onChange={e => set('plan', e.target.value)}>
+            <label htmlFor="qm-result-plan" style={S.label}>검사계획</label>
+            <select id="qm-result-plan" name="plan" style={S.input} value={form.plan} onChange={e => set('plan', e.target.value)}>
               <option value="">-- 선택 --</option>
               {plans.map(p => (
                 <option key={p.id} value={p.id}>{p.plan_code} {p.plan_name}</option>
@@ -462,20 +464,22 @@ function InspectionResultTab() {
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>품목명 *</label>
-            <input style={S.input} value={form.item_name} onChange={e => set('item_name', e.target.value)} placeholder="품목명" />
+            <label htmlFor="qm-result-item-name" style={S.label}>품목명 *</label>
+            <input id="qm-result-item-name" name="item_name" style={S.input} value={form.item_name} onChange={e => set('item_name', e.target.value)} placeholder="품목명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>LOT 번호</label>
-            <input style={S.input} value={form.lot_number} onChange={e => set('lot_number', e.target.value)} placeholder="LOT-001" />
+            <label htmlFor="qm-result-lot-number" style={S.label}>LOT 번호</label>
+            <input id="qm-result-lot-number" name="lot_number" style={S.input} value={form.lot_number} onChange={e => set('lot_number', e.target.value)} placeholder="LOT-001" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>검사수량 *</label>
-            <input style={S.input} type="number" min="0" value={form.inspected_qty} onChange={e => set('inspected_qty', e.target.value)} placeholder="0" />
+            <label htmlFor="qm-result-inspected-qty" style={S.label}>검사수량 *</label>
+            <input id="qm-result-inspected-qty" name="inspected_qty" style={S.input} type="number" min="0" value={form.inspected_qty} onChange={e => set('inspected_qty', e.target.value)} placeholder="0" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>합격수량</label>
+            <label htmlFor="qm-result-passed-qty" style={S.label}>합격수량</label>
             <input
+              id="qm-result-passed-qty"
+              name="passed_qty"
               style={S.input}
               type="number" min="0"
               value={form.passed_qty}
@@ -484,8 +488,10 @@ function InspectionResultTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>불량수량</label>
+            <label htmlFor="qm-result-failed-qty" style={S.label}>불량수량</label>
             <input
+              id="qm-result-failed-qty"
+              name="failed_qty"
               style={{ ...S.input, background: '#f5f5f3', color: '#9b9b9b' }}
               value={failedQty}
               readOnly
@@ -493,16 +499,16 @@ function InspectionResultTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>판정</label>
-            <select style={S.input} value={form.result} onChange={e => set('result', e.target.value)}>
+            <label htmlFor="qm-result-result" style={S.label}>판정</label>
+            <select id="qm-result-result" name="result" style={S.input} value={form.result} onChange={e => set('result', e.target.value)}>
               <option value="합격">합격</option>
               <option value="불합격">불합격</option>
               <option value="조건부합격">조건부합격</option>
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>비고</label>
-            <input style={S.input} value={form.remarks} onChange={e => set('remarks', e.target.value)} placeholder="비고" />
+            <label htmlFor="qm-result-remarks" style={S.label}>비고</label>
+            <input id="qm-result-remarks" name="remarks" style={S.input} value={form.remarks} onChange={e => set('remarks', e.target.value)} placeholder="비고" />
           </div>
           {mutation.isError && (
             <div style={{ color: '#d44c47', fontSize: 12, marginBottom: 8 }}>저장 중 오류가 발생했습니다.</div>
@@ -601,16 +607,16 @@ function DefectTab() {
         <p style={S.formTitle}>신규 등록</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>품목명 *</label>
-            <input style={S.input} value={form.item_name} onChange={e => set('item_name', e.target.value)} placeholder="품목명" />
+            <label htmlFor="qm-defect-item-name" style={S.label}>품목명 *</label>
+            <input id="qm-defect-item-name" name="item_name" style={S.input} value={form.item_name} onChange={e => set('item_name', e.target.value)} placeholder="품목명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>불량유형 *</label>
-            <input style={S.input} value={form.defect_type} onChange={e => set('defect_type', e.target.value)} placeholder="예: 치수불량, 외관불량" />
+            <label htmlFor="qm-defect-type" style={S.label}>불량유형 *</label>
+            <input id="qm-defect-type" name="defect_type" style={S.input} value={form.defect_type} onChange={e => set('defect_type', e.target.value)} placeholder="예: 치수불량, 외관불량" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>심각도</label>
-            <select style={S.input} value={form.severity} onChange={e => set('severity', e.target.value)}>
+            <label htmlFor="qm-defect-severity" style={S.label}>심각도</label>
+            <select id="qm-defect-severity" name="severity" style={S.input} value={form.severity} onChange={e => set('severity', e.target.value)}>
               <option value="경미">경미</option>
               <option value="보통">보통</option>
               <option value="심각">심각</option>
@@ -618,12 +624,14 @@ function DefectTab() {
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>수량 *</label>
-            <input style={S.input} type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} placeholder="0" />
+            <label htmlFor="qm-defect-quantity" style={S.label}>수량 *</label>
+            <input id="qm-defect-quantity" name="quantity" style={S.input} type="number" min="1" value={form.quantity} onChange={e => set('quantity', e.target.value)} placeholder="0" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>설명</label>
+            <label htmlFor="qm-defect-description" style={S.label}>설명</label>
             <textarea
+              id="qm-defect-description"
+              name="description"
               style={{ ...S.input, resize: 'vertical', minHeight: 60 }}
               value={form.description}
               onChange={e => set('description', e.target.value)}
@@ -872,8 +880,10 @@ function SpcTab() {
         <p style={S.formTitle}>SPC 분석 입력</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>측정 항목명</label>
+            <label htmlFor="qm-spc-measurement-name" style={S.label}>측정 항목명</label>
             <input
+              id="qm-spc-measurement-name"
+              name="measurement_name"
               style={S.input}
               value={form.measurement_name}
               onChange={e => set('measurement_name', e.target.value)}
@@ -881,8 +891,10 @@ function SpcTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>USL (상한 규격, 선택)</label>
+            <label htmlFor="qm-spc-usl" style={S.label}>USL (상한 규격, 선택)</label>
             <input
+              id="qm-spc-usl"
+              name="usl"
               style={S.input}
               type="number" step="any"
               value={form.usl}
@@ -891,8 +903,10 @@ function SpcTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>LSL (하한 규격, 선택)</label>
+            <label htmlFor="qm-spc-lsl" style={S.label}>LSL (하한 규격, 선택)</label>
             <input
+              id="qm-spc-lsl"
+              name="lsl"
               style={S.input}
               type="number" step="any"
               value={form.lsl}
@@ -901,8 +915,10 @@ function SpcTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>Target (목표값, 선택)</label>
+            <label htmlFor="qm-spc-target" style={S.label}>Target (목표값, 선택)</label>
             <input
+              id="qm-spc-target"
+              name="target"
               style={S.input}
               type="number" step="any"
               value={form.target}
@@ -911,8 +927,10 @@ function SpcTab() {
             />
           </div>
           <div style={S.field}>
-            <label style={S.label}>측정값 * (쉼표 또는 줄바꿈으로 구분)</label>
+            <label htmlFor="qm-spc-raw-values" style={S.label}>측정값 * (쉼표 또는 줄바꿈으로 구분)</label>
             <textarea
+              id="qm-spc-raw-values"
+              name="raw_values"
               style={{ ...S.input, resize: 'vertical', minHeight: 100, fontFamily: 'monospace', fontSize: 12 }}
               value={form.raw_values}
               onChange={e => set('raw_values', e.target.value)}

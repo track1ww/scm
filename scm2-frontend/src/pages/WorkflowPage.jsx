@@ -109,8 +109,10 @@ export default function WorkflowPage() {
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">결재 템플릿</label>
+                <label htmlFor="wf-request-template" className="block text-xs text-gray-500 mb-1">결재 템플릿</label>
                 <select
+                  id="wf-request-template"
+                  name="template"
                   value={form.template}
                   onChange={e => setForm(f => ({ ...f, template: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -120,8 +122,10 @@ export default function WorkflowPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">제목 *</label>
+                <label htmlFor="wf-request-title" className="block text-xs text-gray-500 mb-1">제목 *</label>
                 <input
+                  id="wf-request-title"
+                  name="title"
                   required
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -131,8 +135,10 @@ export default function WorkflowPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">내용</label>
+              <label htmlFor="wf-request-content" className="block text-xs text-gray-500 mb-1">내용</label>
               <textarea
+                id="wf-request-content"
+                name="content"
                 value={form.content}
                 onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
                 rows={3}

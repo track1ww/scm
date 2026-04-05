@@ -22,7 +22,8 @@ class AuditLogMixin:
 
     def _model_name(self):
         try:
-            return self.queryset.model.__name__
+            qs = self.queryset if getattr(self, 'queryset', None) is not None else self.get_queryset()
+            return qs.model.__name__
         except Exception:
             return ''
 

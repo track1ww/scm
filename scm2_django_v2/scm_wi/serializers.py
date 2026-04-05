@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import WorkInstruction, WorkResult
+from .models import WorkInstruction, WorkResult, WorkStandard
 
 
 class WorkResultSerializer(serializers.ModelSerializer):
@@ -18,3 +18,12 @@ class WorkInstructionSerializer(serializers.ModelSerializer):
         model  = WorkInstruction
         fields = '__all__'
         read_only_fields = ['company']
+
+
+class WorkStandardSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model  = WorkStandard
+        fields = '__all__'
+        read_only_fields = ['company', 'created_at', 'updated_at']

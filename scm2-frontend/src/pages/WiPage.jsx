@@ -240,26 +240,26 @@ function InstructionTab({ data, isLoading, page, setPage }) {
       <div className="flex flex-col md:flex-row gap-5 p-3 md:p-5 items-start">
       <FormPanel onSubmit={handleSubmit} isPending={createMutation.isPending}>
         <div style={S.formRow}>
-          <label style={S.label}>제목 *</label>
-          <input style={S.input} value={form.title}
+          <label htmlFor="wi-instruction-title" style={S.label}>제목 *</label>
+          <input id="wi-instruction-title" name="title" style={S.input} value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder="작업지시 제목" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>작업장</label>
-          <input style={S.input} value={form.work_center}
+          <label htmlFor="wi-instruction-work-center" style={S.label}>작업장</label>
+          <input id="wi-instruction-work-center" name="work_center" style={S.input} value={form.work_center}
             onChange={e => setForm(f => ({ ...f, work_center: e.target.value }))}
             placeholder="예: 1공장 A라인" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>담당자</label>
-          <input style={S.input} value={form.assigned_to}
+          <label htmlFor="wi-instruction-assigned-to" style={S.label}>담당자</label>
+          <input id="wi-instruction-assigned-to" name="assigned_to" style={S.input} value={form.assigned_to}
             onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
             placeholder="담당자 이름" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>우선순위</label>
-          <select style={S.input} value={form.priority}
+          <label htmlFor="wi-instruction-priority" style={S.label}>우선순위</label>
+          <select id="wi-instruction-priority" name="priority" style={S.input} value={form.priority}
             onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
             <option value="높음">높음</option>
             <option value="보통">보통</option>
@@ -267,24 +267,26 @@ function InstructionTab({ data, isLoading, page, setPage }) {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계획 시작</label>
-          <input style={S.input} type="datetime-local" value={form.planned_start}
+          <label htmlFor="wi-instruction-planned-start" style={S.label}>계획 시작</label>
+          <input id="wi-instruction-planned-start" name="planned_start" style={S.input} type="datetime-local" value={form.planned_start}
             onChange={e => setForm(f => ({ ...f, planned_start: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계획 종료</label>
-          <input style={S.input} type="datetime-local" value={form.planned_end}
+          <label htmlFor="wi-instruction-planned-end" style={S.label}>계획 종료</label>
+          <input id="wi-instruction-planned-end" name="planned_end" style={S.input} type="datetime-local" value={form.planned_end}
             onChange={e => setForm(f => ({ ...f, planned_end: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>계획 수량</label>
-          <input style={S.input} type="number" value={form.planned_qty}
+          <label htmlFor="wi-instruction-planned-qty" style={S.label}>계획 수량</label>
+          <input id="wi-instruction-planned-qty" name="planned_qty" style={S.input} type="number" value={form.planned_qty}
             onChange={e => setForm(f => ({ ...f, planned_qty: e.target.value }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>설명</label>
+          <label htmlFor="wi-instruction-description" style={S.label}>설명</label>
           <textarea
+            id="wi-instruction-description"
+            name="description"
             style={{ ...S.input, height: 72, resize: 'vertical' }}
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -352,7 +354,7 @@ export default function WiPage() {
 
   const { data: resultData, isLoading: rLoading } = useQuery({
     queryKey: ['wi-results'],
-    queryFn: () => api.get('/wi/work-orders/?status=COMPLETED').then(r => r.data).catch(() => []),
+    queryFn: () => api.get('/wi/work-orders/?status=완료').then(r => r.data).catch(() => []),
   })
 
   const { data: dashboard } = useQuery({

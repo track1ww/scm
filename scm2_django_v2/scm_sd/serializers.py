@@ -12,6 +12,8 @@ class CustomerSerializer(serializers.ModelSerializer):
 class SalesOrderSerializer(serializers.ModelSerializer):
     customer_display = serializers.CharField(source='customer.customer_name', read_only=True)
     total_amount     = serializers.FloatField(read_only=True)
+    order_number     = serializers.CharField(required=False, allow_blank=True)
+    customer_name    = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model  = SalesOrder

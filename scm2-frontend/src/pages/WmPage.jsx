@@ -222,20 +222,20 @@ function WarehouseTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>창고코드 *</label>
-          <input style={S.input} value={form.warehouse_code}
+          <label htmlFor="wm-warehouse-code" style={S.label}>창고코드 *</label>
+          <input id="wm-warehouse-code" name="warehouse_code" style={S.input} value={form.warehouse_code}
             onChange={e => setForm(f => ({ ...f, warehouse_code: e.target.value }))}
             placeholder="예: WH001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>창고명 *</label>
-          <input style={S.input} value={form.warehouse_name}
+          <label htmlFor="wm-warehouse-name" style={S.label}>창고명 *</label>
+          <input id="wm-warehouse-name" name="warehouse_name" style={S.input} value={form.warehouse_name}
             onChange={e => setForm(f => ({ ...f, warehouse_name: e.target.value }))}
             placeholder="예: 원자재 창고" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>창고유형</label>
-          <select style={S.input} value={form.warehouse_type}
+          <label htmlFor="wm-warehouse-type" style={S.label}>창고유형</label>
+          <select id="wm-warehouse-type" name="warehouse_type" style={S.input} value={form.warehouse_type}
             onChange={e => setForm(f => ({ ...f, warehouse_type: e.target.value }))}>
             <option value="원자재">원자재</option>
             <option value="완제품">완제품</option>
@@ -244,8 +244,8 @@ function WarehouseTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>위치</label>
-          <input style={S.input} value={form.location}
+          <label htmlFor="wm-warehouse-location" style={S.label}>위치</label>
+          <input id="wm-warehouse-location" name="location" style={S.input} value={form.location}
             onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
             placeholder="예: 경기도 안산시" />
         </div>
@@ -362,14 +362,14 @@ function InventoryTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>품목코드 *</label>
-          <input style={S.input} value={form.item_code}
+          <label htmlFor="wm-inventory-item-code" style={S.label}>품목코드 *</label>
+          <input id="wm-inventory-item-code" name="item_code" style={S.input} value={form.item_code}
             onChange={e => setForm(f => ({ ...f, item_code: e.target.value }))}
             placeholder="예: ITEM-001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>창고</label>
-          <select style={S.input} value={form.warehouse}
+          <label htmlFor="wm-inventory-warehouse" style={S.label}>창고</label>
+          <select id="wm-inventory-warehouse" name="warehouse" style={S.input} value={form.warehouse}
             onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))}>
             <option value="">-- 선택 --</option>
             {warehouses.map(w => (
@@ -378,26 +378,26 @@ function InventoryTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>빈코드</label>
-          <input style={S.input} value={form.bin_code}
+          <label htmlFor="wm-inventory-bin-code" style={S.label}>빈코드</label>
+          <input id="wm-inventory-bin-code" name="bin_code" style={S.input} value={form.bin_code}
             onChange={e => setForm(f => ({ ...f, bin_code: e.target.value }))}
             placeholder="예: A-01-01" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>실재고</label>
-          <input style={S.input} type="number" min="0" value={form.stock_qty}
+          <label htmlFor="wm-inventory-stock-qty" style={S.label}>실재고</label>
+          <input id="wm-inventory-stock-qty" name="stock_qty" style={S.input} type="number" min="0" value={form.stock_qty}
             onChange={e => setForm(f => ({ ...f, stock_qty: e.target.value === '' ? '' : Number(e.target.value) }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>최소재고</label>
-          <input style={S.input} type="number" min="0" value={form.min_stock}
+          <label htmlFor="wm-inventory-min-stock" style={S.label}>최소재고</label>
+          <input id="wm-inventory-min-stock" name="min_stock" style={S.input} type="number" min="0" value={form.min_stock}
             onChange={e => setForm(f => ({ ...f, min_stock: e.target.value === '' ? '' : Number(e.target.value) }))}
             placeholder="0" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>로트번호</label>
-          <input style={S.input} value={form.lot_number}
+          <label htmlFor="wm-inventory-lot-number" style={S.label}>로트번호</label>
+          <input id="wm-inventory-lot-number" name="lot_number" style={S.input} value={form.lot_number}
             onChange={e => setForm(f => ({ ...f, lot_number: e.target.value }))}
             placeholder="예: LOT-20260101" />
         </div>
@@ -550,8 +550,8 @@ function BinTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>창고 *</label>
-          <select style={S.input} value={form.warehouse}
+          <label htmlFor="wm-bin-warehouse" style={S.label}>창고 *</label>
+          <select id="wm-bin-warehouse" name="warehouse" style={S.input} value={form.warehouse}
             onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))}>
             <option value="">-- 창고 선택 --</option>
             {warehouses.map(w => (
@@ -560,34 +560,34 @@ function BinTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>Bin 코드 *</label>
-          <input style={S.input} value={form.bin_code}
+          <label htmlFor="wm-bin-bin-code" style={S.label}>Bin 코드 *</label>
+          <input id="wm-bin-bin-code" name="bin_code" style={S.input} value={form.bin_code}
             onChange={e => setForm(f => ({ ...f, bin_code: e.target.value }))}
             placeholder="예: A-01-01" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>통로</label>
-          <input style={S.input} value={form.aisle}
+          <label htmlFor="wm-bin-aisle" style={S.label}>통로</label>
+          <input id="wm-bin-aisle" name="aisle" style={S.input} value={form.aisle}
             onChange={e => setForm(f => ({ ...f, aisle: e.target.value }))}
             placeholder="예: A" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
           <div>
-            <label style={S.label}>행</label>
-            <input style={S.input} value={form.row}
+            <label htmlFor="wm-bin-row" style={S.label}>행</label>
+            <input id="wm-bin-row" name="row" style={S.input} value={form.row}
               onChange={e => setForm(f => ({ ...f, row: e.target.value }))}
               placeholder="예: 01" />
           </div>
           <div>
-            <label style={S.label}>열</label>
-            <input style={S.input} value={form.column}
+            <label htmlFor="wm-bin-column" style={S.label}>열</label>
+            <input id="wm-bin-column" name="column" style={S.input} value={form.column}
               onChange={e => setForm(f => ({ ...f, column: e.target.value }))}
               placeholder="예: 01" />
           </div>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>최대용량</label>
-          <input style={S.input} type="number" value={form.max_capacity}
+          <label htmlFor="wm-bin-max-capacity" style={S.label}>최대용량</label>
+          <input id="wm-bin-max-capacity" name="max_capacity" style={S.input} type="number" value={form.max_capacity}
             onChange={e => setForm(f => ({ ...f, max_capacity: e.target.value }))}
             placeholder="0" />
         </div>
@@ -732,14 +732,14 @@ function CycleCountTab() {
         isPending={saveMutation.isPending}
       >
         <div style={S.formRow}>
-          <label style={S.label}>실사번호 (자동생성 가능)</label>
-          <input style={S.input} value={form.count_number}
+          <label htmlFor="wm-cyclecount-count-number" style={S.label}>실사번호 (자동생성 가능)</label>
+          <input id="wm-cyclecount-count-number" name="count_number" style={S.input} value={form.count_number}
             onChange={e => setForm(f => ({ ...f, count_number: e.target.value }))}
             placeholder="예: CC-2026-001" />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>창고 *</label>
-          <select style={S.input} value={form.warehouse}
+          <label htmlFor="wm-cyclecount-warehouse" style={S.label}>창고 *</label>
+          <select id="wm-cyclecount-warehouse" name="warehouse" style={S.input} value={form.warehouse}
             onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))}>
             <option value="">-- 창고 선택 --</option>
             {warehouses.map(w => (
@@ -748,13 +748,13 @@ function CycleCountTab() {
           </select>
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>실사일 *</label>
-          <input style={S.input} type="date" value={form.count_date}
+          <label htmlFor="wm-cyclecount-count-date" style={S.label}>실사일 *</label>
+          <input id="wm-cyclecount-count-date" name="count_date" style={S.input} type="date" value={form.count_date}
             onChange={e => setForm(f => ({ ...f, count_date: e.target.value }))} />
         </div>
         <div style={S.formRow}>
-          <label style={S.label}>담당자</label>
-          <input style={S.input} value={form.assigned_to}
+          <label htmlFor="wm-cyclecount-assigned-to" style={S.label}>담당자</label>
+          <input id="wm-cyclecount-assigned-to" name="assigned_to" style={S.input} value={form.assigned_to}
             onChange={e => setForm(f => ({ ...f, assigned_to: e.target.value }))}
             placeholder="담당자 이름" />
         </div>

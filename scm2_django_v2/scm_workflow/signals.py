@@ -150,3 +150,162 @@ def notify_on_approval_decision(sender, instance, **kwargs):
             ref_module='workflow',
             ref_id=instance.pk,
         )
+
+
+# ---------------------------------------------------------------------------
+# Status-transition map for linked documents.
+#
+# Key   : (app_label, model_name_lower) as stored in ContentType.
+# Value : (status_field_name, approved_value, rejected_value_or_None)
+#
+# Entries with rejected_value=None mean "leave the document status unchanged
+# on rejection — only log."
+#
+# AccountMove uses the field named 'state', not 'status'; all others use
+# 'status'.  WorkInstruction is the actual model in scm_wi (there is no
+# WorkOrder model).
+# ---------------------------------------------------------------------------
+import logging  # noqa: E402  — placed here to stay close to the handler below
+
+logger = logging.getLogger(__name__)
+
+_TRANSITION_MAP: dict[tuple[str, str], tuple[str, str, str | None]] = {
+    # (app_label, model_name_lower): (field, approved_value, rejected_value)
+    ('scm_mm', 'purchaseorder'):    ('status', '발주확정',    None),
+    ('scm_sd', 'salesorder'):       ('status', '생산/조달중', None),
+    ('scm_pp', 'productionorder'):  ('status', '확정',        None),
+    ('scm_fi', 'accountmove'):      ('state',  'POSTED',      None),   # FI uses 'state' field
+    ('scm_wi', 'workinstruction'):  ('status', '진행중',      None),   # actual model in scm_wi
+}
+
+
+@receiver(pre_save, sender='scm_workflow.ApprovalRequest')
+def auto_transition_on_approval(sender, instance, **kwargs):
+    """
+    When an ApprovalRequest transitions to 'approved' or 'rejected',
+    automatically update the status of the linked document.
+
+    Document resolution uses the GenericForeignKey stored on ApprovalRequest
+    (content_type + object_id).  The transition target is looked up in
+    _TRANSITION_MAP by (app_label, model_name_lower).
+
+    On approval  : sets the configured field to the approved value.
+    On rejection : logs the event; document status is intentionally left
+                   unchanged (business rule: human intervention required).
+
+    All failures are caught and logged so that a broken cross-module
+    reference never interrupts the approval workflow itself.
+    """
+    if not instance.pk:
+        return  # New record — no status transition possible yet.
+
+    try:
+        old = sender.objects.get(pk=instance.pk)
+    except sender.DoesNotExist:
+        return
+
+    if old.status == instance.status:
+        return  # No status change — nothing to do.
+
+    new_status = instance.status
+    if new_status not in ('approved', 'rejected'):
+        return  # Only act on terminal approval outcomes.
+
+    # ------------------------------------------------------------------ #
+    # Resolve the linked document via GenericForeignKey.                  #
+    # ------------------------------------------------------------------ #
+    content_type = instance.content_type
+    object_id    = instance.object_id
+
+    if content_type is None or object_id is None:
+        logger.warning(
+            'auto_transition_on_approval: ApprovalRequest #%s has no linked '
+            'document (content_type=%s, object_id=%s). Skipping transition.',
+            instance.pk, content_type, object_id,
+        )
+        return
+
+    app_label  = content_type.app_label
+    model_name = content_type.model  # already lowercase
+
+    map_key = (app_label, model_name)
+    if map_key not in _TRANSITION_MAP:
+        # Unknown document type — not an error, just not configured.
+        logger.debug(
+            'auto_transition_on_approval: No transition rule for (%s, %s). '
+            'ApprovalRequest #%s — skipping.',
+            app_label, model_name, instance.pk,
+        )
+        return
+
+    field_name, approved_value, rejected_value = _TRANSITION_MAP[map_key]
+
+    # ------------------------------------------------------------------ #
+    # Fetch the linked document.                                          #
+    # ------------------------------------------------------------------ #
+    try:
+        from django.apps import apps as django_apps
+        Model = django_apps.get_model(app_label, model_name)
+        doc   = Model.objects.get(pk=object_id)
+    except LookupError:
+        logger.error(
+            'auto_transition_on_approval: Could not resolve model %s.%s '
+            'for ApprovalRequest #%s.',
+            app_label, model_name, instance.pk,
+        )
+        return
+    except Model.DoesNotExist:
+        logger.error(
+            'auto_transition_on_approval: %s.%s pk=%s does not exist '
+            '(referenced by ApprovalRequest #%s).',
+            app_label, model_name, object_id, instance.pk,
+        )
+        return
+    except Exception as exc:
+        logger.exception(
+            'auto_transition_on_approval: Unexpected error fetching %s.%s '
+            'pk=%s for ApprovalRequest #%s: %s',
+            app_label, model_name, object_id, instance.pk, exc,
+        )
+        return
+
+    # ------------------------------------------------------------------ #
+    # Apply the status transition.                                        #
+    # ------------------------------------------------------------------ #
+    try:
+        if new_status == 'approved':
+            old_field_value = getattr(doc, field_name, None)
+            setattr(doc, field_name, approved_value)
+            doc.save(update_fields=[field_name])
+            logger.info(
+                'auto_transition_on_approval: [APPROVED] %s.%s pk=%s — '
+                '%s: %r → %r  (ApprovalRequest #%s)',
+                app_label, model_name, object_id,
+                field_name, old_field_value, approved_value, instance.pk,
+            )
+
+        else:  # 'rejected'
+            if rejected_value is not None:
+                old_field_value = getattr(doc, field_name, None)
+                setattr(doc, field_name, rejected_value)
+                doc.save(update_fields=[field_name])
+                logger.info(
+                    'auto_transition_on_approval: [REJECTED] %s.%s pk=%s — '
+                    '%s: %r → %r  (ApprovalRequest #%s)',
+                    app_label, model_name, object_id,
+                    field_name, old_field_value, rejected_value, instance.pk,
+                )
+            else:
+                logger.info(
+                    'auto_transition_on_approval: [REJECTED] %s.%s pk=%s — '
+                    'no status revert configured; document left unchanged. '
+                    '(ApprovalRequest #%s)',
+                    app_label, model_name, object_id, instance.pk,
+                )
+
+    except Exception as exc:
+        logger.exception(
+            'auto_transition_on_approval: Failed to update %s field on '
+            '%s.%s pk=%s for ApprovalRequest #%s: %s',
+            field_name, app_label, model_name, object_id, instance.pk, exc,
+        )

@@ -7,7 +7,16 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { useConfirm } from '../hooks/useConfirm'
 import Pagination from '../components/Pagination'
 
-const TABS = ['운송 계획', '운송사 관리', '운송 추적']
+// ─── 외부 API 피처 조회 ───────────────────────────────────────
+const fetchActiveFeatures = () =>
+  api.get('/external/configs/active-features/')
+    .then(r => r.data?.active_features || [])
+    .catch(() => [])
+
+const fetchExchangeRates = () =>
+  api.get('/external/proxy/exchange-rates/').then(r => r.data).catch(() => null)
+
+const BASE_TABS = ['운송 계획', '운송사 관리', '운송 추적']
 
 // ─── 공통 헬퍼 ────────────────────────────────────────────────
 function getList(data) {
@@ -281,8 +290,8 @@ function TransportOrderTab() {
         <p style={S.formTitle}>신규 등록</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>운송사</label>
-            <select style={S.input} value={form.carrier} onChange={e => set('carrier', e.target.value)}>
+            <label htmlFor="tm-order-carrier" style={S.label}>운송사</label>
+            <select id="tm-order-carrier" name="carrier" style={S.input} value={form.carrier} onChange={e => set('carrier', e.target.value)}>
               <option value="">-- 선택 --</option>
               {carriers.map(c => (
                 <option key={c.id} value={c.id}>{c.carrier_code} - {c.carrier_name}</option>
@@ -290,36 +299,36 @@ function TransportOrderTab() {
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>출발지 *</label>
-            <input style={S.input} value={form.origin} onChange={e => set('origin', e.target.value)} placeholder="출발지" />
+            <label htmlFor="tm-order-origin" style={S.label}>출발지 *</label>
+            <input id="tm-order-origin" name="origin" style={S.input} value={form.origin} onChange={e => set('origin', e.target.value)} placeholder="출발지" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>도착지 *</label>
-            <input style={S.input} value={form.destination} onChange={e => set('destination', e.target.value)} placeholder="도착지" />
+            <label htmlFor="tm-order-destination" style={S.label}>도착지 *</label>
+            <input id="tm-order-destination" name="destination" style={S.input} value={form.destination} onChange={e => set('destination', e.target.value)} placeholder="도착지" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>화물 설명</label>
-            <input style={S.input} value={form.item_description} onChange={e => set('item_description', e.target.value)} placeholder="화물 내용" />
+            <label htmlFor="tm-order-item-description" style={S.label}>화물 설명</label>
+            <input id="tm-order-item-description" name="item_description" style={S.input} value={form.item_description} onChange={e => set('item_description', e.target.value)} placeholder="화물 내용" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>중량(kg)</label>
-            <input style={S.input} type="number" min="0" step="0.01" value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} placeholder="0" />
+            <label htmlFor="tm-order-weight-kg" style={S.label}>중량(kg)</label>
+            <input id="tm-order-weight-kg" name="weight_kg" style={S.input} type="number" min="0" step="0.01" value={form.weight_kg} onChange={e => set('weight_kg', e.target.value)} placeholder="0" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>운임</label>
-            <input style={S.input} type="number" min="0" value={form.freight_cost} onChange={e => set('freight_cost', e.target.value)} placeholder="0" />
+            <label htmlFor="tm-order-freight-cost" style={S.label}>운임</label>
+            <input id="tm-order-freight-cost" name="freight_cost" style={S.input} type="number" min="0" value={form.freight_cost} onChange={e => set('freight_cost', e.target.value)} placeholder="0" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>통화</label>
-            <select style={S.input} value={form.currency} onChange={e => set('currency', e.target.value)}>
+            <label htmlFor="tm-order-currency" style={S.label}>통화</label>
+            <select id="tm-order-currency" name="currency" style={S.input} value={form.currency} onChange={e => set('currency', e.target.value)}>
               <option value="KRW">KRW</option>
               <option value="USD">USD</option>
               <option value="EUR">EUR</option>
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>계획일</label>
-            <input style={S.input} type="date" value={form.planned_date} onChange={e => set('planned_date', e.target.value)} />
+            <label htmlFor="tm-order-planned-date" style={S.label}>계획일</label>
+            <input id="tm-order-planned-date" name="planned_date" style={S.input} type="date" value={form.planned_date} onChange={e => set('planned_date', e.target.value)} />
           </div>
           {mutation.isError && (
             <div style={{ color: '#d44c47', fontSize: 12, marginBottom: 8 }}>저장 중 오류가 발생했습니다.</div>
@@ -448,28 +457,28 @@ function CarrierTab() {
         <p style={S.formTitle}>{editId ? '수정' : '신규 등록'}</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>운송사코드 *</label>
-            <input style={S.input} value={form.carrier_code} onChange={e => set('carrier_code', e.target.value)} placeholder="CAR-001" />
+            <label htmlFor="tm-carrier-carrier-code" style={S.label}>운송사코드 *</label>
+            <input id="tm-carrier-carrier-code" name="carrier_code" style={S.input} value={form.carrier_code} onChange={e => set('carrier_code', e.target.value)} placeholder="CAR-001" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>운송사명 *</label>
-            <input style={S.input} value={form.carrier_name} onChange={e => set('carrier_name', e.target.value)} placeholder="운송사명" />
+            <label htmlFor="tm-carrier-carrier-name" style={S.label}>운송사명 *</label>
+            <input id="tm-carrier-carrier-name" name="carrier_name" style={S.input} value={form.carrier_name} onChange={e => set('carrier_name', e.target.value)} placeholder="운송사명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>연락처</label>
-            <input style={S.input} value={form.contact} onChange={e => set('contact', e.target.value)} placeholder="담당자명" />
+            <label htmlFor="tm-carrier-contact" style={S.label}>연락처</label>
+            <input id="tm-carrier-contact" name="contact" style={S.input} value={form.contact} onChange={e => set('contact', e.target.value)} placeholder="담당자명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>전화</label>
-            <input style={S.input} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
+            <label htmlFor="tm-carrier-phone" style={S.label}>전화</label>
+            <input id="tm-carrier-phone" name="phone" style={S.input} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>이메일</label>
-            <input style={S.input} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="example@carrier.com" />
+            <label htmlFor="tm-carrier-email" style={S.label}>이메일</label>
+            <input id="tm-carrier-email" name="email" style={S.input} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="example@carrier.com" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>차량유형</label>
-            <select style={S.input} value={form.vehicle_type} onChange={e => set('vehicle_type', e.target.value)}>
+            <label htmlFor="tm-carrier-vehicle-type" style={S.label}>차량유형</label>
+            <select id="tm-carrier-vehicle-type" name="vehicle_type" style={S.input} value={form.vehicle_type} onChange={e => set('vehicle_type', e.target.value)}>
               <option value="">-- 선택 --</option>
               <option value="트럭">트럭</option>
               <option value="컨테이너">컨테이너</option>
@@ -579,8 +588,8 @@ function TrackingTab() {
         <p style={S.formTitle}>추적 등록</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>운송오더</label>
-            <select style={S.input} value={form.transport_order} onChange={e => set('transport_order', e.target.value)}>
+            <label htmlFor="tm-tracking-transport-order" style={S.label}>운송오더</label>
+            <select id="tm-tracking-transport-order" name="transport_order" style={S.input} value={form.transport_order} onChange={e => set('transport_order', e.target.value)}>
               <option value="">-- 선택 --</option>
               {orders.map(o => (
                 <option key={o.id} value={o.id}>{o.transport_number} - {o.origin}→{o.destination}</option>
@@ -588,16 +597,16 @@ function TrackingTab() {
             </select>
           </div>
           <div style={S.field}>
-            <label style={S.label}>현재 위치 *</label>
-            <input style={S.input} value={form.location} onChange={e => set('location', e.target.value)} placeholder="예: 부산항 대기" />
+            <label htmlFor="tm-tracking-location" style={S.label}>현재 위치 *</label>
+            <input id="tm-tracking-location" name="location" style={S.input} value={form.location} onChange={e => set('location', e.target.value)} placeholder="예: 부산항 대기" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>상태 메모</label>
-            <input style={S.input} value={form.status_note} onChange={e => set('status_note', e.target.value)} placeholder="상태 설명" />
+            <label htmlFor="tm-tracking-status-note" style={S.label}>상태 메모</label>
+            <input id="tm-tracking-status-note" name="status_note" style={S.input} value={form.status_note} onChange={e => set('status_note', e.target.value)} placeholder="상태 설명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>추적 시각</label>
-            <input style={S.input} type="datetime-local" value={form.tracked_at} onChange={e => set('tracked_at', e.target.value)} />
+            <label htmlFor="tm-tracking-tracked-at" style={S.label}>추적 시각</label>
+            <input id="tm-tracking-tracked-at" name="tracked_at" style={S.input} type="datetime-local" value={form.tracked_at} onChange={e => set('tracked_at', e.target.value)} />
           </div>
           {mutation.isError && (
             <div style={{ color: '#d44c47', fontSize: 12, marginBottom: 8 }}>저장 중 오류가 발생했습니다.</div>
@@ -618,6 +627,226 @@ function TrackingTab() {
   )
 }
 
+// ─── 실시간 조회 탭 ───────────────────────────────────────────
+function RealtimeTab({ activeFeatures }) {
+  const hasDelivery = activeFeatures.includes('delivery_tracking')
+  const hasCustoms  = activeFeatures.includes('customs_tracking')
+  const hasAny      = hasDelivery || hasCustoms
+
+  // 배송 추적 상태
+  const [trackingNumber, setTrackingNumber] = useState('')
+  const [carrierCode, setCarrierCode]       = useState('')
+  const [deliveryResult, setDeliveryResult] = useState(null)
+  const [deliveryError, setDeliveryError]   = useState('')
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
+
+  // 통관 조회 상태
+  const [blNumber, setBlNumber]             = useState('')
+  const [customsResult, setCustomsResult]   = useState(null)
+  const [customsError, setCustomsError]     = useState('')
+  const [customsLoading, setCustomsLoading] = useState(false)
+
+  const handleTrackDelivery = async () => {
+    if (!trackingNumber.trim()) return
+    setDeliveryLoading(true)
+    setDeliveryError('')
+    setDeliveryResult(null)
+    try {
+      const params = new URLSearchParams({ tracking_number: trackingNumber.trim() })
+      if (carrierCode.trim()) params.append('carrier_code', carrierCode.trim())
+      const res = await api.get(`/external/proxy/track-delivery/?${params}`)
+      setDeliveryResult(res.data)
+    } catch (e) {
+      setDeliveryError(e?.response?.data?.detail || e?.response?.data?.error || '배송 조회 중 오류가 발생했습니다.')
+    } finally {
+      setDeliveryLoading(false)
+    }
+  }
+
+  const handleTrackCustoms = async () => {
+    if (!blNumber.trim()) return
+    setCustomsLoading(true)
+    setCustomsError('')
+    setCustomsResult(null)
+    try {
+      const res = await api.get(`/external/proxy/track-customs/?bl_number=${encodeURIComponent(blNumber.trim())}`)
+      setCustomsResult(res.data)
+    } catch (e) {
+      setCustomsError(e?.response?.data?.detail || e?.response?.data?.error || '통관 조회 중 오류가 발생했습니다.')
+    } finally {
+      setCustomsLoading(false)
+    }
+  }
+
+  const cardStyle = {
+    flex: '1 1 0',
+    minWidth: 280,
+    background: 'white',
+    border: '1px solid #e9e9e7',
+    borderRadius: 10,
+    padding: 20,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  }
+
+  const sectionTitleStyle = {
+    fontSize: 14, fontWeight: 600, color: '#1a1a2e', margin: '0 0 16px',
+    paddingBottom: 10, borderBottom: '1px solid #f0f0ee',
+  }
+
+  const apiNotice = (
+    <div style={{
+      background: '#f9f9f7', border: '1px dashed #d0d0cc',
+      borderRadius: 8, padding: '20px 16px', textAlign: 'center',
+      color: '#9b9b9b', fontSize: 12, marginTop: 8,
+    }}>
+      관리자 페이지 &gt; 외부 API 관리에서 API를 등록하시면 나타납니다.
+    </div>
+  )
+
+  return (
+    <div style={{ padding: 20 }}>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+
+        {/* Section A: 배송 추적 */}
+        <div style={cardStyle}>
+          <p style={sectionTitleStyle}>📦 배송 추적</p>
+          {!hasDelivery ? apiNotice : (
+            <>
+              <div style={S.field}>
+                <label style={S.label}>운송장 번호 *</label>
+                <input
+                  style={S.input}
+                  value={trackingNumber}
+                  onChange={e => setTrackingNumber(e.target.value)}
+                  placeholder="운송장 번호 입력"
+                  onKeyDown={e => e.key === 'Enter' && handleTrackDelivery()}
+                />
+              </div>
+              <div style={S.field}>
+                <label style={S.label}>택배사 코드 (선택)</label>
+                <input
+                  style={S.input}
+                  value={carrierCode}
+                  onChange={e => setCarrierCode(e.target.value)}
+                  placeholder="예: 04=CJ대한통운"
+                />
+              </div>
+              <button
+                style={{ ...S.btnSave, marginTop: 8 }}
+                onClick={handleTrackDelivery}
+                disabled={deliveryLoading || !trackingNumber.trim()}
+              >
+                {deliveryLoading ? '조회 중...' : '조회'}
+              </button>
+              {deliveryError && (
+                <div style={{ marginTop: 12, color: '#d44c47', fontSize: 12 }}>{deliveryError}</div>
+              )}
+              {deliveryResult && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>
+                    운송장: <strong>{deliveryResult.tracking_number}</strong>
+                    {deliveryResult.carrier && <> · {deliveryResult.carrier}</>}
+                  </div>
+                  {Array.isArray(deliveryResult.history) && deliveryResult.history.length > 0 ? (
+                    <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {deliveryResult.history.map((step, i) => {
+                        const isLast   = i === deliveryResult.history.length - 1
+                        const isPending = !step.time
+                        const dotColor  = isLast ? '#2e7d32' : isPending ? '#9b9b9b' : '#1a1a2e'
+                        return (
+                          <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+                            <div style={{
+                              width: 10, height: 10, borderRadius: '50%',
+                              background: dotColor, marginTop: 3, flexShrink: 0,
+                            }} />
+                            <div>
+                              <div style={{ fontSize: 11, color: '#9b9b9b' }}>
+                                {step.time ?? '시간 미확인'}{step.location ? ` · ${step.location}` : ''}
+                              </div>
+                              <div style={{ fontSize: 13, color: dotColor, fontWeight: isLast ? 600 : 400 }}>
+                                {step.status ?? step.detail ?? '-'}
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#9b9b9b' }}>추적 이력이 없습니다.</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Section B: 통관 조회 */}
+        <div style={cardStyle}>
+          <p style={sectionTitleStyle}>🛃 통관 조회</p>
+          {!hasCustoms ? apiNotice : (
+            <>
+              <div style={S.field}>
+                <label style={S.label}>B/L 번호 / 화물관리번호 *</label>
+                <input
+                  style={S.input}
+                  value={blNumber}
+                  onChange={e => setBlNumber(e.target.value)}
+                  placeholder="B/L 번호 또는 화물관리번호"
+                  onKeyDown={e => e.key === 'Enter' && handleTrackCustoms()}
+                />
+              </div>
+              <button
+                style={{ ...S.btnSave, marginTop: 8 }}
+                onClick={handleTrackCustoms}
+                disabled={customsLoading || !blNumber.trim()}
+              >
+                {customsLoading ? '조회 중...' : '조회'}
+              </button>
+              {customsError && (
+                <div style={{ marginTop: 12, color: '#d44c47', fontSize: 12 }}>{customsError}</div>
+              )}
+              {customsResult && (
+                <div style={{ marginTop: 16, overflowX: 'auto' }}>
+                  <div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>
+                    B/L: <strong>{customsResult.bl_number}</strong>
+                  </div>
+                  {Array.isArray(customsResult.history) && customsResult.history.length > 0 ? (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr>
+                          {['처리일시', '처리단계', '처리내용', '처리기관'].map(h => (
+                            <th key={h} style={{
+                              background: '#f5f5f3', padding: '7px 10px',
+                              textAlign: 'left', fontWeight: 600, color: '#6b6b6b',
+                              borderBottom: '1px solid #e9e9e7', whiteSpace: 'nowrap',
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {customsResult.history.map((row, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid #f0f0ee' }}>
+                            <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.datetime ?? row.date ?? '-'}</td>
+                            <td style={{ padding: '7px 10px' }}>{row.stage ?? row.step ?? '-'}</td>
+                            <td style={{ padding: '7px 10px' }}>{row.content ?? row.description ?? '-'}</td>
+                            <td style={{ padding: '7px 10px' }}>{row.office ?? row.agency ?? '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#9b9b9b' }}>통관 이력이 없습니다.</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── 메인 ─────────────────────────────────────────────────────
 export default function TmPage() {
   const [activeTab, setActiveTab] = useState(0)
@@ -631,6 +860,23 @@ export default function TmPage() {
     queryFn: () => api.get('/tm/orders/').then(r => r.data).catch(() => []),
   })
 
+  // 외부 API 피처 목록
+  const { data: activeFeatures = [] } = useQuery({
+    queryKey: ['external-active-features'],
+    queryFn: fetchActiveFeatures,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const hasExchangeRate = activeFeatures.includes('exchange_rate')
+
+  // 환율 조회 (exchange_rate 피처가 활성일 때만)
+  const { data: rateData, isLoading: rateLoading } = useQuery({
+    queryKey: ['external-exchange-rates'],
+    queryFn: fetchExchangeRates,
+    enabled: hasExchangeRate,
+    refetchInterval: 300000,
+  })
+
   const orders     = getList(ordersData)
   const inTransit  = dashboardData?.in_progress ?? orders.filter(o => o.status === 'in_transit').length
   const completed  = dashboardData?.completed   ?? orders.filter(o => o.status === 'delivered').length
@@ -638,16 +884,39 @@ export default function TmPage() {
   const avgFreight = dashboardData?.avg_freight ??
     (costs.length > 0 ? Math.round(costs.reduce((s, v) => s + v, 0) / costs.length) : '-')
 
-  const TAB_COMPONENTS = [TransportOrderTab, CarrierTab, TrackingTab]
-  const ActiveContent = TAB_COMPONENTS[activeTab]
+  const TABS = BASE_TABS
+  const hasTrackingAPI = activeFeatures.includes('delivery_tracking') || activeFeatures.includes('customs_tracking')
+
+  // 환율 ticker 문자열 조합
+  let exchangeTicker = null
+  if (hasExchangeRate) {
+    if (rateLoading) {
+      exchangeTicker = '환율 로딩중...'
+    } else if (rateData) {
+      const krwPerUsd = rateData.rates?.KRW
+      const krwRates  = rateData.krw_rates || {}
+      const parts = []
+      if (krwPerUsd)          parts.push(`USD ${Math.round(krwPerUsd).toLocaleString()}원`)
+      if (krwRates.EUR)       parts.push(`EUR ${Math.round(krwRates.EUR).toLocaleString()}원`)
+      if (krwRates.JPY)       parts.push(`JPY ${krwRates.JPY.toFixed(2)}원`)
+      if (parts.length > 0)   exchangeTicker = parts.join(' | ')
+    }
+  }
 
   return (
     <div style={{ fontFamily: "'Inter', 'Noto Sans KR', sans-serif" }}>
       {/* 헤더 */}
       <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <span style={{ fontSize: 24 }}>🚢</span>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>TM 운송관리</h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 24 }}>🚢</span>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>TM 운송관리</h1>
+          </div>
+          {exchangeTicker && (
+            <div style={{ fontSize: 12, color: '#6b6b6b', letterSpacing: '0.01em' }}>
+              🌐 {exchangeTicker}
+            </div>
+          )}
         </div>
         <div style={{ fontSize: 13, color: '#9b9b9b' }}>Transportation Management — 운송계획·운송사·운임을 통합 관리합니다.</div>
       </div>
@@ -685,7 +954,9 @@ export default function TmPage() {
           ))}
           </div>
         </div>
-        <ActiveContent />
+        {activeTab === 0 && <TransportOrderTab />}
+        {activeTab === 1 && <CarrierTab />}
+        {activeTab === 2 && <RealtimeTab activeFeatures={activeFeatures} />}
       </div>
     </div>
   )

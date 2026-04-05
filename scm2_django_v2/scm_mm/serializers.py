@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Supplier, Material, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, MaterialPriceHistory
+from .models import Supplier, Material, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, MaterialPriceHistory, RFQ, SupplierEvaluation
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -27,6 +27,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     total_amount  = serializers.SerializerMethodField()
     lines         = PurchaseOrderLineSerializer(many=True, read_only=True)
+    po_number     = serializers.CharField(required=False, allow_blank=True)
 
     def get_total_amount(self, obj):
         # 라인이 있으면 라인 합계, 없으면 헤더 단일 금액 사용
@@ -50,4 +51,21 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
 class MaterialPriceHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = MaterialPriceHistory
+        fields = '__all__'
+
+
+class RFQSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = RFQ
+        fields = '__all__'
+
+
+class SupplierEvaluationSerializer(serializers.ModelSerializer):
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+
+    class Meta:
+        model = SupplierEvaluation
         fields = '__all__'

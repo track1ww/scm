@@ -109,6 +109,24 @@ export default function ChatPage() {
     },
   })
 
+  const leaveRoom = useMutation({
+    mutationFn: (roomId) => api.post(`/chat/rooms/${roomId}/leave/`),
+    onSuccess: () => {
+      setActiveRoom(null)
+      setActiveName("")
+      qc.invalidateQueries(["chat-rooms"])
+    },
+  })
+
+  const deleteRoom = useMutation({
+    mutationFn: (roomId) => api.delete(`/chat/rooms/${roomId}/`),
+    onSuccess: () => {
+      setActiveRoom(null)
+      setActiveName("")
+      qc.invalidateQueries(["chat-rooms"])
+    },
+  })
+
   // WebSocket으로 메시지 전송, fallback으로 HTTP 사용
   const handleSend = (e) => {
     e.preventDefault()
@@ -148,12 +166,20 @@ export default function ChatPage() {
           </div>
           <div style={{ flex: 1, overflowY: "auto" }}>
             {rooms.map(room => (
-              <div key={room.id} onClick={() => { setActiveRoom(room.id); setActiveName(room.room_name) }}
-                style={{ padding: "12px 16px", cursor: "pointer", background: activeRoom === room.id ? "#e9e9e7" : "white", borderBottom: "1px solid #f1f1ef" }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: "#1a1a1a" }}>{room.room_name}</div>
-                {room.last_message && (
-                  <div style={{ fontSize: 11, color: "#9b9b9b", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{room.last_message.content}</div>
-                )}
+              <div key={room.id}
+                style={{ padding: "10px 12px", cursor: "pointer", background: activeRoom === room.id ? "#e9e9e7" : "white", borderBottom: "1px solid #f1f1ef", display: "flex", alignItems: "center", gap: 6 }}
+                onClick={() => { setActiveRoom(room.id); setActiveName(room.room_name) }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#1a1a1a" }}>{room.room_name}</div>
+                  {room.last_message && (
+                    <div style={{ fontSize: 11, color: "#9b9b9b", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{room.last_message.content}</div>
+                  )}
+                </div>
+                <button
+                  title="나가기"
+                  onClick={e => { e.stopPropagation(); if (window.confirm(`"${room.room_name}"에서 나가시겠습니까?`)) leaveRoom.mutate(room.id) }}
+                  style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#9b9b9b", lineHeight: 1, padding: "2px 4px" }}
+                >×</button>
               </div>
             ))}
           </div>
@@ -163,7 +189,19 @@ export default function ChatPage() {
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#9b9b9b" }}>채팅방을 선택하세요</div>
           ) : (
             <>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid #e9e9e7", background: "#f7f7f5", fontSize: 13, fontWeight: 600 }}>{activeName}</div>
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid #e9e9e7", background: "#f7f7f5", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{activeName}</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    onClick={() => { if (window.confirm(`"${activeName}"에서 나가시겠습니까?`)) leaveRoom.mutate(activeRoom) }}
+                    style={{ fontSize: 11, padding: "3px 10px", background: "#f5f5f3", color: "#6b6b6b", border: "1px solid #e9e9e7", borderRadius: 4, cursor: "pointer" }}
+                  >나가기</button>
+                  <button
+                    onClick={() => { if (window.confirm(`"${activeName}" 채팅방을 삭제하시겠습니까? 모든 메시지가 삭제됩니다.`)) deleteRoom.mutate(activeRoom) }}
+                    style={{ fontSize: 11, padding: "3px 10px", background: "#fff0f0", color: "#cc3333", border: "1px solid #f5c5c5", borderRadius: 4, cursor: "pointer" }}
+                  >삭제</button>
+                </div>
+              </div>
               <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
                 {messages.map((msg, i) => {
                   const isMe = msg.is_mine || String(msg.sender) === String(user?.id)

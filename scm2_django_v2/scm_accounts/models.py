@@ -38,8 +38,9 @@ class UserPermission(models.Model):
     user      = models.ForeignKey(User, on_delete=models.CASCADE,
                                    related_name='module_permissions')
     module    = models.CharField(max_length=20)
-    can_read  = models.BooleanField(default=False)
-    can_write = models.BooleanField(default=False)
+    can_read   = models.BooleanField(default=False)
+    can_write  = models.BooleanField(default=False)
+    can_delete = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ('user', 'module')
@@ -67,23 +68,23 @@ ROLE_PRESETS = {
     'CUSTOM':      '사용자 정의',
 }
 
-# 역할별 기본 권한 매핑 {module: (can_read, can_write)}
+# 역할별 기본 권한 매핑 {module: (can_read, can_write, can_delete)}
 ROLE_DEFAULT_PERMISSIONS = {
-    'ADMIN':      {m: (True, True) for m in ALL_MODULES},
-    'ACCOUNTANT': {**{m: (False, False) for m in ALL_MODULES},
-                   'fi': (True, True), 'mm': (True, False), 'sd': (True, False)},
-    'BUYER':      {**{m: (False, False) for m in ALL_MODULES},
-                   'mm': (True, True), 'wm': (True, False), 'fi': (True, False)},
-    'SALES':      {**{m: (False, False) for m in ALL_MODULES},
-                   'sd': (True, True), 'wm': (True, False), 'fi': (True, False)},
-    'WAREHOUSE':  {**{m: (False, False) for m in ALL_MODULES},
-                   'wm': (True, True), 'mm': (True, False), 'tm': (True, True)},
-    'HR_STAFF':   {**{m: (False, False) for m in ALL_MODULES},
-                   'hr': (True, True), 'workflow': (True, True)},
-    'PRODUCTION': {**{m: (False, False) for m in ALL_MODULES},
-                   'pp': (True, True), 'wm': (True, False), 'qm': (True, True), 'wi': (True, True)},
-    'VIEWER':     {m: (True, False) for m in ALL_MODULES},
-    'CUSTOM':     {m: (False, False) for m in ALL_MODULES},
+    'ADMIN':      {m: (True, True, True) for m in ALL_MODULES},
+    'ACCOUNTANT': {**{m: (False, False, False) for m in ALL_MODULES},
+                   'fi': (True, True, False), 'mm': (True, False, False), 'sd': (True, False, False)},
+    'BUYER':      {**{m: (False, False, False) for m in ALL_MODULES},
+                   'mm': (True, True, False), 'wm': (True, False, False), 'fi': (True, False, False)},
+    'SALES':      {**{m: (False, False, False) for m in ALL_MODULES},
+                   'sd': (True, True, False), 'wm': (True, False, False), 'fi': (True, False, False)},
+    'WAREHOUSE':  {**{m: (False, False, False) for m in ALL_MODULES},
+                   'wm': (True, True, False), 'mm': (True, False, False), 'tm': (True, True, False)},
+    'HR_STAFF':   {**{m: (False, False, False) for m in ALL_MODULES},
+                   'hr': (True, True, False), 'workflow': (True, True, False)},
+    'PRODUCTION': {**{m: (False, False, False) for m in ALL_MODULES},
+                   'pp': (True, True, False), 'wm': (True, False, False), 'qm': (True, True, False), 'wi': (True, True, False)},
+    'VIEWER':     {m: (True, False, False) for m in ALL_MODULES},
+    'CUSTOM':     {m: (False, False, False) for m in ALL_MODULES},
 }
 
 
@@ -104,10 +105,10 @@ class Role(models.Model):
     def apply_to_user(self, user: User):
         """이 역할의 기본 권한을 유저 UserPermission에 일괄 적용합니다."""
         perm_map = ROLE_DEFAULT_PERMISSIONS.get(self.code, ROLE_DEFAULT_PERMISSIONS['CUSTOM'])
-        for module, (can_read, can_write) in perm_map.items():
+        for module, (can_read, can_write, can_delete) in perm_map.items():
             UserPermission.objects.update_or_create(
                 user=user, module=module,
-                defaults={'can_read': can_read, 'can_write': can_write},
+                defaults={'can_read': can_read, 'can_write': can_write, 'can_delete': can_delete},
             )
 
 

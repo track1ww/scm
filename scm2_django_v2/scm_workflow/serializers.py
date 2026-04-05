@@ -76,8 +76,9 @@ class ApprovalRequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApprovalRequest
         fields = [
-            'company', 'template', 'content_type', 'object_id', 'title'
+            'id', 'company', 'template', 'content_type', 'object_id', 'title'
         ]
+        read_only_fields = ['id']
 
     def validate(self, attrs):
         template = attrs.get('template')

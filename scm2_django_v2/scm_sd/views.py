@@ -39,7 +39,18 @@ class SalesOrderViewSet(AuditLogMixin, viewsets.ModelViewSet):
         ).select_related('customer').order_by('-ordered_at')
 
     def perform_create(self, serializer):
-        serializer.save(company=self.request.user.company)
+        import uuid
+        from django.utils import timezone
+        order_number = serializer.validated_data.get('order_number') or \
+            f'SO-{timezone.now().strftime("%Y%m%d")}-{uuid.uuid4().hex[:6].upper()}'
+        customer = serializer.validated_data.get('customer')
+        customer_name = serializer.validated_data.get('customer_name') or \
+            (customer.customer_name if customer else '')
+        serializer.save(
+            company=self.request.user.company,
+            order_number=order_number,
+            customer_name=customer_name,
+        )
 
     @action(detail=False, methods=['get'])
     def dashboard(self, request):

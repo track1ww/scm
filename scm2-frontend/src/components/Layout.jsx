@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   Package, ShoppingCart, Warehouse, Factory,
   Users, DollarSign, CheckSquare, Truck,
   ClipboardList, LayoutDashboard, MessageSquare,
-  LogOut, Microscope, GitMerge, Bell, Menu, X,
+  LogOut, Microscope, GitMerge, Bell, Menu, X, ShieldCheck,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '../stores/authStore'
@@ -47,9 +47,9 @@ function UnreadBadge() {
   )
 }
 
-function Sidebar({ onClose }) {
+function Sidebar({ onClose, onNotifOpen }) {
   const { user, logout } = useAuthStore()
-  const [notifOpen, setNotifOpen] = useState(false)
+  const adminMenu = user?.is_admin ? [{ path: '/admin', icon: <ShieldCheck size={16} />, label: '관리자' }] : []
 
   return (
     <div style={{
@@ -61,7 +61,7 @@ function Sidebar({ onClose }) {
       {/* Header */}
       <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid #e9e9e7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: '#1a1a1a', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Package size={16} /> SCM 통합관리
+          <Package size={16} /> ERP 통합관리
         </div>
         {onClose && (
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
@@ -72,7 +72,7 @@ function Sidebar({ onClose }) {
 
       {/* Nav */}
       <nav style={{ padding: 8, flex: 1 }}>
-        {MENU.map(({ path, icon, label }) => (
+        {[...MENU, ...adminMenu].map(({ path, icon, label }) => (
           <NavLink
             key={path}
             to={path}
@@ -102,14 +102,13 @@ function Sidebar({ onClose }) {
           </div>
           <div style={{ position: 'relative' }}>
             <button
-              onClick={() => setNotifOpen(o => !o)}
+              onClick={onNotifOpen}
               aria-label="알림 열기"
               style={{ position: 'relative', padding: 6, background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6 }}
             >
               <Bell size={18} color="#6b6b6b" aria-hidden="true" />
               <UnreadBadge />
             </button>
-            <NotificationPanel isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
           </div>
         </div>
         <button
@@ -129,14 +128,24 @@ function Sidebar({ onClose }) {
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [notifOpen, setNotifOpen]   = useState(false)
+  const { user, login: _l } = useAuthStore()
   useNotificationSocket()
+
+  // Refresh profile on mount to pick up server-side changes (e.g. is_admin update)
+  useEffect(() => {
+    client.get('/accounts/profile/').then(r => {
+      localStorage.setItem('user', JSON.stringify(r.data))
+      useAuthStore.setState({ user: r.data })
+    }).catch(() => {})
+  }, [])
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Inter', 'Noto Sans KR', sans-serif" }}>
 
       {/* ── 데스크탑 사이드바 (768px 이상) ── */}
       <div style={{ display: 'none' }} className="sidebar-desktop">
-        <Sidebar />
+        <Sidebar onNotifOpen={() => setNotifOpen(o => !o)} />
       </div>
 
       {/* ── 모바일 오버레이 사이드바 ── */}
@@ -150,10 +159,13 @@ export default function Layout() {
             }}
           />
           <div style={{ position: 'fixed', inset: '0 auto 0 0', zIndex: 50, display: 'flex' }}>
-            <Sidebar onClose={() => setMobileOpen(false)} />
+            <Sidebar onClose={() => setMobileOpen(false)} onNotifOpen={() => setNotifOpen(o => !o)} />
           </div>
         </>
       )}
+
+      {/* ── 알림 패널 (사이드바 overflow 밖, fixed 포지션) ── */}
+      <NotificationPanel isOpen={notifOpen} onClose={() => setNotifOpen(false)} />
 
       {/* ── 메인 콘텐츠 ── */}
       <main style={{ flex: 1, minWidth: 0, background: '#ffffff', display: 'flex', flexDirection: 'column' }}>
@@ -165,7 +177,7 @@ export default function Layout() {
           >
             <Menu size={20} color="#1a1a1a" />
           </button>
-          <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>SCM 통합관리</span>
+          <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>ERP 통합관리</span>
         </div>
 
         <div style={{ padding: '12px 24px', flex: 1 }}>

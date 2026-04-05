@@ -35,4 +35,7 @@ urlpatterns = [
 
     # PDF 보고서
     path('api/reports/',        include('scm_reports.urls')),
+
+    # 외부 API 연동
+    path('api/external/',       include('scm_external.urls')),
 ]

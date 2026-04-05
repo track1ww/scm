@@ -110,10 +110,10 @@ function FormPanel({ title, onSubmit, onCancel, isEditMode, isPending, children 
 }
 
 // ─── 폼 필드 공통 ─────────────────────────────────────────────
-function Field({ label, children }) {
+function Field({ label, htmlFor, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, color: '#6b6b6b', display: 'block', marginBottom: 4 }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ fontSize: 12, color: '#6b6b6b', display: 'block', marginBottom: 4 }}>{label}</label>
       {children}
     </div>
   )
@@ -346,24 +346,27 @@ function SupplierTab() {
         >
           <GlobalError message={globalError} onClose={() => setGlobalError('')} />
           <SuccessMessage message={successMsg} onClose={() => setSuccessMsg('')} />
-          <Field label="공급처명 *">
+          <Field label="공급처명 *" htmlFor="sup-supplier-name">
             <input
+              id="sup-supplier-name" name="supplier_name"
               style={inputStyle}
               value={form.supplier_name}
               onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))}
               placeholder="회사명을 입력하세요"
             />
           </Field>
-          <Field label="연락처">
+          <Field label="연락처" htmlFor="sup-contact">
             <input
+              id="sup-contact" name="contact"
               style={inputStyle}
               value={form.contact}
               onChange={e => setForm(f => ({ ...f, contact: e.target.value }))}
               placeholder="연락처를 입력하세요"
             />
           </Field>
-          <Field label="이메일">
+          <Field label="이메일" htmlFor="sup-email">
             <input
+              id="sup-email" name="email"
               style={inputStyle}
               type="email"
               value={form.email}
@@ -371,8 +374,9 @@ function SupplierTab() {
               placeholder="이메일을 입력하세요"
             />
           </Field>
-          <Field label="결제조건">
+          <Field label="결제조건" htmlFor="sup-payment-terms">
             <select
+              id="sup-payment-terms" name="payment_terms"
               style={selectStyle}
               value={form.payment_terms}
               onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}
@@ -513,32 +517,36 @@ function MaterialTab() {
           onCancel={handleCancel}
           isPending={isPending}
         >
-          <Field label="자재코드 *">
+          <Field label="자재코드 *" htmlFor="mat-material-code">
             <input
+              id="mat-material-code" name="material_code"
               style={inputStyle}
               value={form.material_code}
               onChange={e => setForm(f => ({ ...f, material_code: e.target.value }))}
               placeholder="예: MAT-001"
             />
           </Field>
-          <Field label="자재명 *">
+          <Field label="자재명 *" htmlFor="mat-material-name">
             <input
+              id="mat-material-name" name="material_name"
               style={inputStyle}
               value={form.material_name}
               onChange={e => setForm(f => ({ ...f, material_name: e.target.value }))}
               placeholder="자재명을 입력하세요"
             />
           </Field>
-          <Field label="단위">
+          <Field label="단위" htmlFor="mat-unit">
             <input
+              id="mat-unit" name="unit"
               style={inputStyle}
               value={form.unit}
               onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
               placeholder="예: kg, EA, box"
             />
           </Field>
-          <Field label="최소재고">
+          <Field label="최소재고" htmlFor="mat-min-stock">
             <input
+              id="mat-min-stock" name="min_stock"
               style={inputStyle}
               type="number"
               value={form.min_stock}
@@ -546,8 +554,9 @@ function MaterialTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="리드타임 (일)">
+          <Field label="리드타임 (일)" htmlFor="mat-lead-time-days">
             <input
+              id="mat-lead-time-days" name="lead_time_days"
               style={inputStyle}
               type="number"
               value={form.lead_time_days}
@@ -713,8 +722,8 @@ function OrderTab() {
             onSubmit={handleSubmit}
             isPending={createMut.isPending}
           >
-            <Field label="공급처 *">
-              <select style={selectStyle} value={form.supplier}
+            <Field label="공급처 *" htmlFor="ord-supplier">
+              <select id="ord-supplier" name="supplier" style={selectStyle} value={form.supplier}
                 onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))}>
                 <option value="">공급처 선택</option>
                 {suppliers.map(s => (
@@ -722,22 +731,22 @@ function OrderTab() {
                 ))}
               </select>
             </Field>
-            <Field label="품목명 (요약) *">
-              <input style={inputStyle} value={form.item_name} placeholder="예: 원자재 일괄 발주"
+            <Field label="품목명 (요약) *" htmlFor="ord-item-name">
+              <input id="ord-item-name" name="item_name" style={inputStyle} value={form.item_name} placeholder="예: 원자재 일괄 발주"
                 onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))} />
             </Field>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Field label="수량">
-                <input style={inputStyle} type="number" min="0" value={form.quantity}
+              <Field label="수량" htmlFor="ord-quantity">
+                <input id="ord-quantity" name="quantity" style={inputStyle} type="number" min="0" value={form.quantity}
                   onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
               </Field>
-              <Field label="단가 (원)">
-                <input style={inputStyle} type="number" min="0" value={form.unit_price}
+              <Field label="단가 (원)" htmlFor="ord-unit-price">
+                <input id="ord-unit-price" name="unit_price" style={inputStyle} type="number" min="0" value={form.unit_price}
                   onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} />
               </Field>
             </div>
-            <Field label="납기일">
-              <input style={inputStyle} type="date" value={form.expected_date}
+            <Field label="납기일" htmlFor="ord-expected-date">
+              <input id="ord-expected-date" name="expected_date" style={inputStyle} type="date" value={form.expected_date}
                 onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} />
             </Field>
 
@@ -761,8 +770,9 @@ function OrderTab() {
                     color: '#cc3333', fontSize: 14, lineHeight: 1,
                   }} aria-label={`라인 ${i + 1} 삭제`}>×</button>
                   <div style={{ fontSize: 11, color: '#9b9b9b', marginBottom: 6 }}>라인 {i + 1}</div>
-                  <Field label="자재 (선택)">
-                    <select style={{ ...selectStyle, fontSize: 12, padding: '6px 8px' }}
+                  <Field label="자재 (선택)" htmlFor={`ord-line-${i}-material`}>
+                    <select id={`ord-line-${i}-material`} name={`line_${i}_material`}
+                      style={{ ...selectStyle, fontSize: 12, padding: '6px 8px' }}
                       value={ln.material}
                       onChange={e => {
                         const mat = materials.find(m => String(m.id) === e.target.value)
@@ -775,24 +785,28 @@ function OrderTab() {
                       ))}
                     </select>
                   </Field>
-                  <Field label="품목명 *">
-                    <input style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
+                  <Field label="품목명 *" htmlFor={`ord-line-${i}-item-name`}>
+                    <input id={`ord-line-${i}-item-name`} name={`line_${i}_item_name`}
+                      style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
                       value={ln.item_name} placeholder="품목명"
                       onChange={e => updateLine(i, 'item_name', e.target.value)} />
                   </Field>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <Field label="수량 *">
-                      <input style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
+                    <Field label="수량 *" htmlFor={`ord-line-${i}-quantity`}>
+                      <input id={`ord-line-${i}-quantity`} name={`line_${i}_quantity`}
+                        style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
                         type="number" min="0" value={ln.quantity} placeholder="0"
                         onChange={e => updateLine(i, 'quantity', e.target.value)} />
                     </Field>
-                    <Field label="단가">
-                      <input style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
+                    <Field label="단가" htmlFor={`ord-line-${i}-unit-price`}>
+                      <input id={`ord-line-${i}-unit-price`} name={`line_${i}_unit_price`}
+                        style={{ ...inputStyle, fontSize: 12, padding: '6px 8px' }}
                         type="number" min="0" value={ln.unit_price} placeholder="0"
                         onChange={e => updateLine(i, 'unit_price', e.target.value)} />
                     </Field>
-                    <Field label="단위">
-                      <input style={{ ...inputStyle, fontSize: 12, padding: '6px 8px', width: 60 }}
+                    <Field label="단위" htmlFor={`ord-line-${i}-unit`}>
+                      <input id={`ord-line-${i}-unit`} name={`line_${i}_unit`}
+                        style={{ ...inputStyle, fontSize: 12, padding: '6px 8px', width: 60 }}
                         value={ln.unit} placeholder="EA"
                         onChange={e => updateLine(i, 'unit', e.target.value)} />
                     </Field>
@@ -932,7 +946,7 @@ function ReceiptTab() {
   })
   const { data: orderedData } = useQuery({
     queryKey: ['mm-orders-ordered'],
-    queryFn: () => api.get('/mm/orders/?status=ordered').then(r => r.data),
+    queryFn: () => api.get('/mm/orders/?status=발주확정').then(r => r.data),
   })
 
   const rows          = getList(data)
@@ -982,8 +996,9 @@ function ReceiptTab() {
           onSubmit={handleSubmit}
           isPending={createMut.isPending}
         >
-          <Field label="발주 선택 *">
+          <Field label="발주 선택 *" htmlFor="rec-order">
             <select
+              id="rec-order" name="order"
               style={selectStyle}
               value={form.order}
               onChange={e => setForm(f => ({ ...f, order: e.target.value }))}
@@ -997,8 +1012,9 @@ function ReceiptTab() {
               ))}
             </select>
           </Field>
-          <Field label="입고수량 *">
+          <Field label="입고수량 *" htmlFor="rec-received-qty">
             <input
+              id="rec-received-qty" name="received_qty"
               style={inputStyle}
               type="number"
               value={form.received_qty}
@@ -1006,16 +1022,18 @@ function ReceiptTab() {
               placeholder="0"
             />
           </Field>
-          <Field label="창고">
+          <Field label="창고" htmlFor="rec-warehouse">
             <input
+              id="rec-warehouse" name="warehouse"
               style={inputStyle}
               value={form.warehouse}
               onChange={e => setForm(f => ({ ...f, warehouse: e.target.value }))}
               placeholder="창고명을 입력하세요"
             />
           </Field>
-          <Field label="검수자">
+          <Field label="검수자" htmlFor="rec-inspector-name">
             <input
+              id="rec-inspector-name" name="inspector_name"
               style={inputStyle}
               value={form.inspector_name}
               onChange={e => setForm(f => ({ ...f, inspector_name: e.target.value }))}

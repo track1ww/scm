@@ -188,8 +188,10 @@ function CompleteOrderModal({ order, onClose }) {
           오더번호: <strong>{order.order_number}</strong>
         </p>
         <div style={S.field}>
-          <label style={S.label}>실제 생산수량 *</label>
+          <label htmlFor="pp-complete-actual-qty" style={S.label}>실제 생산수량 *</label>
           <input
+            id="pp-complete-actual-qty"
+            name="actual_qty"
             style={S.input}
             type="number" min="0"
             value={actualQty}
@@ -319,32 +321,34 @@ function ProductionOrderTab() {
         <p style={S.formTitle}>신규 등록</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>오더번호 *</label>
-            <input style={S.input} value={form.order_number} onChange={e => set('order_number', e.target.value)} placeholder="PO-2026-001" />
+            <label htmlFor="pp-order-order-number" style={S.label}>오더번호 *</label>
+            <input id="pp-order-order-number" name="order_number" style={S.input} value={form.order_number} onChange={e => set('order_number', e.target.value)} placeholder="PO-2026-001" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>제품명 *</label>
-            <input style={S.input} value={form.product_name} onChange={e => set('product_name', e.target.value)} placeholder="제품명 입력" />
+            <label htmlFor="pp-order-product-name" style={S.label}>제품명 *</label>
+            <input id="pp-order-product-name" name="product_name" style={S.input} value={form.product_name} onChange={e => set('product_name', e.target.value)} placeholder="제품명 입력" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>계획수량 *</label>
-            <input style={S.input} type="number" min="1" value={form.planned_qty} onChange={e => set('planned_qty', e.target.value)} placeholder="0" />
+            <label htmlFor="pp-order-planned-qty" style={S.label}>계획수량 *</label>
+            <input id="pp-order-planned-qty" name="planned_qty" style={S.input} type="number" min="1" value={form.planned_qty} onChange={e => set('planned_qty', e.target.value)} placeholder="0" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>계획시작일</label>
-            <input style={S.input} type="date" value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
+            <label htmlFor="pp-order-planned-start" style={S.label}>계획시작일</label>
+            <input id="pp-order-planned-start" name="planned_start" style={S.input} type="date" value={form.planned_start} onChange={e => set('planned_start', e.target.value)} />
           </div>
           <div style={S.field}>
-            <label style={S.label}>계획종료일</label>
-            <input style={S.input} type="date" value={form.planned_end} onChange={e => set('planned_end', e.target.value)} />
+            <label htmlFor="pp-order-planned-end" style={S.label}>계획종료일</label>
+            <input id="pp-order-planned-end" name="planned_end" style={S.input} type="date" value={form.planned_end} onChange={e => set('planned_end', e.target.value)} />
           </div>
           <div style={S.field}>
-            <label style={S.label}>작업장</label>
-            <input style={S.input} value={form.work_center} onChange={e => set('work_center', e.target.value)} placeholder="작업장" />
+            <label htmlFor="pp-order-work-center" style={S.label}>작업장</label>
+            <input id="pp-order-work-center" name="work_center" style={S.input} value={form.work_center} onChange={e => set('work_center', e.target.value)} placeholder="작업장" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>비고</label>
+            <label htmlFor="pp-order-note" style={S.label}>비고</label>
             <textarea
+              id="pp-order-note"
+              name="note"
               style={{ ...S.input, resize: 'vertical', minHeight: 60 }}
               value={form.note}
               onChange={e => set('note', e.target.value)}
@@ -494,16 +498,16 @@ function BomTab() {
         <p style={S.formTitle}>{editId ? '수정' : '신규 등록'}</p>
         <form onSubmit={handleSubmit}>
           <div style={S.field}>
-            <label style={S.label}>BOM 코드 *</label>
-            <input style={S.input} value={form.bom_code} onChange={e => set('bom_code', e.target.value)} placeholder="BOM-001" />
+            <label htmlFor="pp-bom-bom-code" style={S.label}>BOM 코드 *</label>
+            <input id="pp-bom-bom-code" name="bom_code" style={S.input} value={form.bom_code} onChange={e => set('bom_code', e.target.value)} placeholder="BOM-001" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>제품명 *</label>
-            <input style={S.input} value={form.product_name} onChange={e => set('product_name', e.target.value)} placeholder="제품명" />
+            <label htmlFor="pp-bom-product-name" style={S.label}>제품명 *</label>
+            <input id="pp-bom-product-name" name="product_name" style={S.input} value={form.product_name} onChange={e => set('product_name', e.target.value)} placeholder="제품명" />
           </div>
           <div style={S.field}>
-            <label style={S.label}>버전</label>
-            <input style={S.input} value={form.version} onChange={e => set('version', e.target.value)} placeholder="1.0" />
+            <label htmlFor="pp-bom-version" style={S.label}>버전</label>
+            <input id="pp-bom-version" name="version" style={S.input} value={form.version} onChange={e => set('version', e.target.value)} placeholder="1.0" />
           </div>
           <div style={{ ...S.field, display: 'flex', alignItems: 'center', gap: 8 }}>
             <input

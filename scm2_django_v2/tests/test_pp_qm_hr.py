@@ -18,7 +18,7 @@ from rest_framework import status
 from scm_accounts.models import Company, User
 from scm_mm.models import Supplier, Material, PurchaseOrder
 from scm_sd.models import Customer, SalesOrder
-from scm_pp.models import BillOfMaterial, BomLine, ProductionOrder
+from scm_pp.models import BillOfMaterial, BomLine, ProductionOrder, WorkCenterCost
 from scm_qm.models import InspectionPlan, InspectionResult, DefectRecord, CorrectiveAction
 from scm_hr.models import Department, Employee, Payroll
 from scm_fi.models import AccountMove, Account
@@ -335,9 +335,10 @@ class HRExtendedTests(BaseAPITestCase):
         emp = self._make_emp(code='EMP-P4-LV')
         resp = self.client.post('/api/hr/leaves/', {
             'employee': emp.pk,
-            'leave_type': '연차',
+            'leave_type': 'annual',
             'start_date': '2024-07-01',
             'end_date': '2024-07-02',
+            'days': '1.0',
             'reason': '개인 사유',
         })
         self.assertEqual(resp.status_code, 201, resp.data)
@@ -460,7 +461,7 @@ class CrossModuleFITests(BaseAPITestCase):
         MaterialPriceHistory.objects.create(
             company=self.company, material=mat,
             supplier=None, unit_price=Decimal('2000.00'),
-            effective_date=datetime.date(2024, 1, 1),
+            effective_from=datetime.date(2024, 1, 1),
         )
 
         bom = BillOfMaterial.objects.create(
@@ -548,3 +549,165 @@ class ReportsPDFTests(BaseAPITestCase):
             '/api/reports/financial-statement/pdf/?type=income&year=INVALID&month=6'
         )
         self.assertEqual(resp.status_code, 400)
+
+
+# ──────────────────────────────────────────────
+# P5-2: 생산원가 정밀화 — 공정비·인건비 포함
+# ──────────────────────────────────────────────
+
+class ProductionCostPrecisionTests(BaseAPITestCase):
+    """
+    WorkCenterCost 모델 + ProductionOrder 원가 필드 검증.
+    공정비(기계+간접) + 인건비 포함 총원가 계산 및 FI 전표 반영 확인.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.mat = Material.objects.create(
+            company=self.company, material_code='P52-MAT', material_name='P52원재료',
+        )
+        from scm_mm.models import MaterialPriceHistory
+        MaterialPriceHistory.objects.create(
+            company=self.company, material=self.mat,
+            unit_price=Decimal('1000.00'),
+            effective_from=datetime.date(2024, 1, 1),
+        )
+        self.bom = BillOfMaterial.objects.create(
+            company=self.company, bom_code='P52-BOM', product_name='P52완제품',
+        )
+        BomLine.objects.create(
+            bom=self.bom, material_code='P52-MAT', material_name='P52원재료',
+            quantity=Decimal('3.000'), unit='EA', scrap_rate=Decimal('0.00'),
+        )
+        self.wcc = WorkCenterCost.objects.create(
+            company=self.company, work_center='WC-001',
+            machine_rate=Decimal('5000.00'),
+            labor_rate=Decimal('8000.00'),
+            overhead_rate=Decimal('2000.00'),
+            effective_from=datetime.date(2024, 1, 1),
+        )
+
+    def test_p52_01_work_center_cost_api_create(self):
+        """WorkCenterCost API POST → 201."""
+        resp = self.client.post('/api/pp/work-center-costs/', {
+            'work_center': 'WC-NEW',
+            'machine_rate': '3000.00',
+            'labor_rate': '6000.00',
+            'overhead_rate': '1000.00',
+            'effective_from': '2024-01-01',
+        })
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data['work_center'], 'WC-NEW')
+
+    def test_p52_02_work_center_cost_total_rate(self):
+        """total_rate = machine + labor + overhead = 15,000."""
+        self.assertAlmostEqual(float(self.wcc.total_rate), 15000.0, places=1)
+
+    def test_p52_03_completion_sets_material_cost(self):
+        """PP 완료 → material_cost = 1000 × 3 × 4 = 12,000."""
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-MAT',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=4, status='생산중',
+            work_center='WC-001', planned_hours=Decimal('2.00'),
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        self.assertAlmostEqual(float(pp.material_cost), 12000.0, places=1)
+
+    def test_p52_04_completion_sets_process_and_labor_cost(self):
+        """PP 완료 → process_cost=(5000+2000)×2=14,000, labor_cost=8000×2=16,000."""
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-PLC',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=2, status='생산중',
+            work_center='WC-001', planned_hours=Decimal('2.00'),
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        self.assertAlmostEqual(float(pp.process_cost), 14000.0, places=1)  # (5000+2000)×2
+        self.assertAlmostEqual(float(pp.labor_cost),   16000.0, places=1)  # 8000×2
+
+    def test_p52_05_total_cost_equals_sum(self):
+        """total_cost = material_cost + process_cost + labor_cost."""
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-TOT',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=2, status='생산중',
+            work_center='WC-001', planned_hours=Decimal('2.00'),
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        expected = float(pp.material_cost) + float(pp.process_cost) + float(pp.labor_cost)
+        self.assertAlmostEqual(float(pp.total_cost), expected, places=1)
+
+    def test_p52_06_actual_hours_takes_priority_over_planned(self):
+        """actual_hours가 있으면 planned_hours 대신 actual_hours 사용."""
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-ACT',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=1, status='생산중',
+            work_center='WC-001',
+            planned_hours=Decimal('10.00'),  # 이 값은 무시돼야 함
+            actual_hours=Decimal('3.00'),    # 이 값이 사용됨
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        # labor_cost = 8000 × 3 = 24,000 (planned 10시간 아님)
+        self.assertAlmostEqual(float(pp.labor_cost), 24000.0, places=1)
+
+    def test_p52_07_no_work_center_cost_zero_process_labor(self):
+        """WorkCenterCost 없으면 process_cost=0, labor_cost=0."""
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-NOWC',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=2, status='생산중',
+            work_center='UNKNOWN-WC', planned_hours=Decimal('5.00'),
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        self.assertAlmostEqual(float(pp.process_cost), 0.0, places=1)
+        self.assertAlmostEqual(float(pp.labor_cost),   0.0, places=1)
+
+    def test_p52_08_fi_journal_uses_total_cost(self):
+        """FI 생산원가전표 금액 = total_cost (자재+공정+인건비)."""
+        from scm_fi.models import AccountMove
+        pp = ProductionOrder.objects.create(
+            company=self.company, order_number='P52-PP-FI',
+            bom=self.bom, product_name='P52완제품',
+            planned_qty=2, status='생산중',
+            work_center='WC-001', planned_hours=Decimal('2.00'),
+        )
+        pp.status = '완료'
+        pp.save()
+
+        pp.refresh_from_db()
+        move = AccountMove.objects.filter(
+            company=self.company, move_number='AUTO-PP-P52-PP-FI',
+        ).first()
+        self.assertIsNotNone(move, 'FI 생산원가전표 없음')
+        self.assertAlmostEqual(float(move.total_debit), float(pp.total_cost), places=1)
+
+    def test_p52_09_work_center_cost_list_scoped(self):
+        """WorkCenterCost 목록은 본인 회사만 포함."""
+        other = Company.objects.create(company_code='WCC-OTHER', company_name='타회사WCC')
+        WorkCenterCost.objects.create(
+            company=other, work_center='OTHER-WC',
+            machine_rate=Decimal('1.00'), labor_rate=Decimal('1.00'),
+            overhead_rate=Decimal('1.00'), effective_from=datetime.date(2024, 1, 1),
+        )
+        resp = self.client.get('/api/pp/work-center-costs/')
+        self.assertEqual(resp.status_code, 200)
+        names = [r['work_center'] for r in resp.data.get('results', resp.data)]
+        self.assertIn('WC-001', names)
+        self.assertNotIn('OTHER-WC', names)

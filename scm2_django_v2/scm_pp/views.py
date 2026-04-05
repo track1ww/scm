@@ -3,9 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import BillOfMaterial, BomLine, ProductionOrder, MrpRun
+from .models import BillOfMaterial, BomLine, ProductionOrder, MrpRun, WorkCenterCost
 from .serializers import (BillOfMaterialSerializer, BomLineSerializer,
-                           ProductionOrderSerializer, MrpRunSerializer)
+                           ProductionOrderSerializer, MrpRunSerializer,
+                           WorkCenterCostSerializer)
 from scm_core.mixins import AuditLogMixin, StateLockMixin
 
 
@@ -63,6 +64,23 @@ class ProductionOrderViewSet(AuditLogMixin, StateLockMixin, viewsets.ModelViewSe
             'total_produced': qs.aggregate(s=Sum('produced_qty'))['s'] or 0,
             'total_defect':   qs.aggregate(s=Sum('defect_qty'))['s'] or 0,
         })
+
+
+class WorkCenterCostViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    """작업장별 원가 단가 (공정비·인건비·간접비) 관리."""
+    audit_module     = 'pp'
+    serializer_class = WorkCenterCostSerializer
+    filter_backends  = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['work_center']
+    search_fields    = ['work_center']
+
+    def get_queryset(self):
+        return WorkCenterCost.objects.filter(
+            company=self.request.user.company
+        ).order_by('work_center', '-effective_from')
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
 
 
 class MrpRunViewSet(viewsets.ModelViewSet):

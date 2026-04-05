@@ -33,6 +33,32 @@ class ChatRoomViewSet(viewsets.ModelViewSet):
         ).update(last_read_at=timezone.now())
         return Response({'status': 'ok'})
 
+    def destroy(self, request, *args, **kwargs):
+        """채팅방 삭제 — 방 개설자 또는 관리자만 가능. 메시지·멤버 모두 삭제."""
+        room = self.get_object()
+        if room.created_by != request.user and not request.user.is_admin:
+            return Response(
+                {'detail': '채팅방을 삭제할 권한이 없습니다.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        room.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def leave(self, request, pk=None):
+        """채팅방 나가기 — 본인을 멤버에서 제거. 남은 멤버 없으면 방 자동 삭제."""
+        room = self.get_object()
+        deleted, _ = ChatMember.objects.filter(room=room, user=request.user).delete()
+        if deleted == 0:
+            return Response(
+                {'detail': '이미 채팅방에 없습니다.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not ChatMember.objects.filter(room=room).exists():
+            room.delete()
+            return Response({'status': 'room_deleted'})
+        return Response({'status': 'left'})
+
     @action(detail=False, methods=['post'])
     def create_dm(self, request):
         """1:1 채팅방 생성 또는 기존 방 반환"""

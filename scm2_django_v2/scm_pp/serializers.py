@@ -1,12 +1,11 @@
 from rest_framework import serializers
-from .models import BillOfMaterial, BomLine, ProductionOrder, MrpRun
+from .models import BillOfMaterial, BomLine, ProductionOrder, MrpRun, WorkCenterCost
 
 
 class BomLineSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BomLine
         fields = '__all__'
-        read_only_fields = ['bom']
 
 
 class BillOfMaterialSerializer(serializers.ModelSerializer):
@@ -33,5 +32,14 @@ class ProductionOrderSerializer(serializers.ModelSerializer):
 class MrpRunSerializer(serializers.ModelSerializer):
     class Meta:
         model  = MrpRun
+        fields = '__all__'
+        read_only_fields = ['company']
+
+
+class WorkCenterCostSerializer(serializers.ModelSerializer):
+    total_rate = serializers.DecimalField(read_only=True, max_digits=12, decimal_places=2)
+
+    class Meta:
+        model  = WorkCenterCost
         fields = '__all__'
         read_only_fields = ['company']

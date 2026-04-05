@@ -1,13 +1,21 @@
+from decimal import Decimal
+
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from scm_core.mixins import AuditLogMixin
-from .models import Supplier, Material, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, MaterialPriceHistory
-from .serializers import (SupplierSerializer, MaterialSerializer,
-                           PurchaseOrderSerializer, PurchaseOrderLineSerializer,
-                           GoodsReceiptSerializer, MaterialPriceHistorySerializer)
+from .models import (
+    Supplier, Material, PurchaseOrder, PurchaseOrderLine,
+    GoodsReceipt, MaterialPriceHistory, RFQ, SupplierEvaluation,
+)
+from .serializers import (
+    SupplierSerializer, MaterialSerializer,
+    PurchaseOrderSerializer, PurchaseOrderLineSerializer,
+    GoodsReceiptSerializer, MaterialPriceHistorySerializer,
+    RFQSerializer, SupplierEvaluationSerializer,
+)
 
 class SupplierViewSet(AuditLogMixin, viewsets.ModelViewSet):
     audit_module = 'mm'
@@ -20,6 +28,9 @@ class SupplierViewSet(AuditLogMixin, viewsets.ModelViewSet):
         return Supplier.objects.filter(
             company=self.request.user.company
         )
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
 
 class MaterialViewSet(AuditLogMixin, viewsets.ModelViewSet):
     audit_module = 'mm'
@@ -155,6 +166,13 @@ class PurchaseOrderViewSet(AuditLogMixin, viewsets.ModelViewSet):
             company=self.request.user.company
         ).select_related('supplier').prefetch_related('lines__material').order_by('-created_at')
 
+    def perform_create(self, serializer):
+        import uuid
+        from django.utils import timezone
+        po_number = serializer.validated_data.get('po_number') or \
+            f'PO-{timezone.now().strftime("%Y%m%d")}-{uuid.uuid4().hex[:6].upper()}'
+        serializer.save(company=self.request.user.company, po_number=po_number)
+
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
         qs = self.get_queryset()
@@ -198,6 +216,149 @@ class MaterialPriceHistoryViewSet(viewsets.ModelViewSet):
         if material_id:
             qs = qs.filter(material_id=material_id)
         return qs
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
+
+
+class RFQViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    """견적요청(RFQ) CRUD + 발주서 자동전환"""
+    audit_module = 'mm'
+    serializer_class = RFQSerializer
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend, filters.OrderingFilter]
+    search_fields = ['rfq_number', 'item_name']
+    filterset_fields = ['status', 'supplier']
+    ordering_fields = ['created_at', 'required_date']
+
+    def get_queryset(self):
+        return RFQ.objects.filter(
+            company=self.request.user.company
+        ).select_related('supplier').order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
+
+    # ------------------------------------------------------------------
+    # POST /api/mm/rfqs/{id}/convert-to-po/
+    # ------------------------------------------------------------------
+    @action(detail=True, methods=['post'], url_path='convert-to-po')
+    def convert_to_po(self, request, pk=None):
+        """
+        RFQ를 발주서(PurchaseOrder)로 자동 전환합니다.
+        status가 'received'(견적수신) 또는 'closed'(마감)인 경우에만 허용됩니다.
+        """
+        rfq = self.get_object()
+
+        # 상태 검증
+        if rfq.status not in ('received', 'closed'):
+            return Response(
+                {'error': '견적 수신 또는 마감 상태에서만 전환 가능합니다.'},
+                status=400,
+            )
+
+        # 발주서 번호 생성 (중복 방지)
+        po_number = f'PO-{rfq.rfq_number}'
+        if PurchaseOrder.objects.filter(po_number=po_number).exists():
+            return Response(
+                {'error': f'이미 전환된 발주서가 있습니다: {po_number}'},
+                status=400,
+            )
+
+        # 최신 단가 조회 (공급업체 + 자재명 기반)
+        unit_price = Decimal('0')
+        try:
+            price_record = (
+                MaterialPriceHistory.objects
+                .filter(
+                    company=rfq.company,
+                    supplier=rfq.supplier,
+                    material__material_name=rfq.item_name,
+                    price_type='purchase',
+                )
+                .order_by('-effective_from')
+                .first()
+            )
+            if price_record:
+                unit_price = price_record.unit_price
+        except Exception:
+            pass  # 단가 조회 실패 시 0으로 진행
+
+        # 발주서 생성
+        po = PurchaseOrder.objects.create(
+            company=rfq.company,
+            po_number=po_number,
+            supplier=rfq.supplier,
+            item_name=rfq.item_name,
+            quantity=rfq.quantity,
+            unit_price=unit_price,
+            delivery_date=rfq.required_date,
+            status='발주확정',
+            note=f'RFQ {rfq.rfq_number}에서 자동 전환',
+        )
+
+        # RFQ 상태를 'closed'로 업데이트
+        rfq.status = 'closed'
+        rfq.save(update_fields=['status'])
+
+        # 알림 발송 (DB 저장 + WebSocket push)
+        self._notify_auto_po(rfq, po)
+
+        return Response({'po_number': po.po_number, 'id': po.id}, status=201)
+
+    # ------------------------------------------------------------------
+    # 내부 헬퍼
+    # ------------------------------------------------------------------
+    def _notify_auto_po(self, rfq, po):
+        """발주서 자동생성 알림을 회사 사용자 전원에게 전송합니다."""
+        title = '발주서 자동생성'
+        message = f'RFQ {rfq.rfq_number}에서 발주서 {po.po_number} 자동생성됨'
+
+        try:
+            from scm_accounts.models import User as ScmUser
+            from scm_notifications.models import Notification
+            from scm_notifications.push import push_notification
+
+            company_users = ScmUser.objects.filter(
+                company=rfq.company,
+                is_active=True,
+            )
+            for user in company_users:
+                notif = Notification.objects.create(
+                    company=rfq.company,
+                    recipient=user,
+                    notification_type='system',
+                    title=title,
+                    message=message,
+                    ref_module='mm',
+                    ref_id=po.id,
+                )
+                push_notification(
+                    user_id=user.id,
+                    notification_data={
+                        'id': notif.id,
+                        'title': notif.title,
+                        'message': notif.message,
+                        'notification_type': notif.notification_type,
+                        'is_read': notif.is_read,
+                        'created_at': str(notif.created_at),
+                    },
+                )
+        except Exception:
+            pass  # 알림 실패가 핵심 트랜잭션을 방해하지 않도록 무시
+
+
+class SupplierEvaluationViewSet(AuditLogMixin, viewsets.ModelViewSet):
+    """공급업체 성과평가"""
+    audit_module = 'mm'
+    serializer_class = SupplierEvaluationSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['supplier', 'eval_year', 'eval_month']
+    ordering_fields = ['eval_year', 'eval_month', 'total_score']
+
+    def get_queryset(self):
+        return SupplierEvaluation.objects.filter(
+            company=self.request.user.company
+        ).select_related('supplier').order_by('-eval_year', '-eval_month')
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)

@@ -6,7 +6,8 @@ import {
 import {
   DollarSign, Factory, Warehouse, Users,
   Package, ShoppingCart,
-  TrendingUp, AlertTriangle, CheckCircle, Clock
+  TrendingUp, AlertTriangle, CheckCircle, Clock,
+  Globe,
 } from 'lucide-react'
 import client from '../api/client'
 import useAuthStore from '../stores/authStore'
@@ -67,6 +68,21 @@ export default function DashboardPage() {
     queryKey: ['dashboard-summary'],
     queryFn: fetchSummary,
     refetchInterval: 60000,
+  })
+
+  const { data: activeFeatures = [] } = useQuery({
+    queryKey: ['external-active-features'],
+    queryFn: () => client.get('/external/configs/active-features/').then(r => r.data?.active_features || []).catch(() => []),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const hasExchangeRate = activeFeatures.includes('exchange_rate')
+
+  const { data: rateData } = useQuery({
+    queryKey: ['external-exchange-rates'],
+    queryFn: () => client.get('/external/proxy/exchange-rates/').then(r => r.data),
+    enabled: hasExchangeRate,
+    refetchInterval: 300000,
   })
 
   if (isLoading) return (
@@ -282,7 +298,53 @@ export default function DashboardPage() {
 
       </div>
 
-      <p className="text-xs text-gray-400 text-right">60초마다 자동 갱신</p>
+      {/* 실시간 환율 위젯 */}
+      <div className="mt-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe size={16} className="text-blue-500" />
+          <h3 className="font-semibold text-gray-700 text-sm">실시간 환율</h3>
+          {hasExchangeRate && <span className="text-xs text-gray-400 ml-1">5분마다 갱신</span>}
+        </div>
+        {!hasExchangeRate ? (
+          <div className="border border-dashed border-gray-300 rounded-lg p-5 text-center text-sm text-gray-400 bg-gray-50">
+            관리자 페이지 &gt; 외부 API 관리에서 환율 API를 등록하시면 나타납니다.
+          </div>
+        ) : rateData ? (() => {
+          const kr = rateData.krw_rates || {}
+          const usdKrw = rateData.rates?.KRW
+          const currencies = [
+            { code: 'USD', flag: '🇺🇸', rate: usdKrw,   label: 'USD',     jpyMode: false },
+            { code: 'EUR', flag: '🇪🇺', rate: kr.EUR,    label: 'EUR',     jpyMode: false },
+            { code: 'JPY', flag: '🇯🇵', rate: kr.JPY,    label: 'JPY 100', jpyMode: true  },
+            { code: 'CNY', flag: '🇨🇳', rate: kr.CNY,    label: 'CNY',     jpyMode: false },
+            { code: 'GBP', flag: '🇬🇧', rate: kr.GBP,    label: 'GBP',     jpyMode: false },
+          ].filter(c => c.rate != null)
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {currencies.map(c => {
+                const displayRate = c.jpyMode
+                  ? (c.rate * 100).toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+                  : Math.round(c.rate).toLocaleString('ko-KR')
+                return (
+                  <div key={c.code} className="bg-white rounded-lg border border-gray-200 p-3 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-lg leading-none">{c.flag}</span>
+                      <span className="text-xs font-semibold text-gray-500">{c.label}</span>
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {displayRate}<span className="text-xs font-normal text-gray-400 ml-0.5">원</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })() : (
+          <div className="text-sm text-gray-400">환율 정보를 불러오는 중...</div>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-400 text-right mt-4">60초마다 자동 갱신</p>
     </div>
   )
 }

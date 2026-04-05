@@ -30,6 +30,8 @@ INSTALLED_APPS = [
     'scm_dashboard',
     # PDF 보고서
     'scm_reports',
+    # 외부 API 연동
+    'scm_external',
 ]
 
 MIDDLEWARE = [
