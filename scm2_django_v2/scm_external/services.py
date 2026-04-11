@@ -284,16 +284,228 @@ class MarineTrafficService:
 
 
 # ─────────────────────────────────────────────────────────────
+# 5. Weather (OpenWeatherMap)
+# ─────────────────────────────────────────────────────────────
+
+class OpenWeatherMapService:
+    """
+    OpenWeatherMap Current + 5-day Forecast API.
+    https://openweathermap.org/api
+    Free tier: 1,000 calls/day
+    """
+    BASE_URL = 'https://api.openweathermap.org/data/2.5'
+
+    # 날씨 코드 → 이모지
+    _ICON_MAP = {
+        range(200, 300): ('⛈️', '뇌우'),
+        range(300, 400): ('🌧️', '이슬비'),
+        range(500, 600): ('🌧️', '비'),
+        range(600, 700): ('❄️', '눈'),
+        range(700, 800): ('🌫️', '안개'),
+    }
+
+    def _icon(self, weather_id):
+        if weather_id == 800: return '☀️', '맑음'
+        if weather_id in range(801, 805): return '⛅', '구름'
+        for r, v in self._ICON_MAP.items():
+            if weather_id in r: return v
+        return '🌤️', '기타'
+
+    def test_connection(self, config):
+        if not config.api_key:
+            return False, 'OpenWeatherMap API 키가 없습니다.'
+        city = config.extra_config.get('city', 'Seoul')
+        try:
+            url = f"{self.BASE_URL}/weather?q={urllib.parse.quote(city)}&appid={config.api_key}&units=metric&lang=kr"
+            data = _http_get(url)
+            if data.get('cod') == 200 or data.get('name'):
+                return True, f"연결 성공 – {data.get('name', city)} 현재 {data.get('main', {}).get('temp', '-')}°C"
+            return False, data.get('message', str(data))
+        except Exception as e:
+            return False, str(e)
+
+    def fetch_data(self, config, **kwargs):
+        city = config.extra_config.get('city', 'Seoul')
+        key  = config.api_key
+        # 현재 날씨
+        cur_url = f"{self.BASE_URL}/weather?q={urllib.parse.quote(city)}&appid={key}&units=metric&lang=kr"
+        cur = _http_get(cur_url)
+        weather_id  = cur.get('weather', [{}])[0].get('id', 800)
+        icon, desc  = self._icon(weather_id)
+        current = {
+            'city':        cur.get('name', city),
+            'temp':        round(cur.get('main', {}).get('temp', 0), 1),
+            'feels_like':  round(cur.get('main', {}).get('feels_like', 0), 1),
+            'humidity':    cur.get('main', {}).get('humidity'),
+            'wind_speed':  cur.get('wind', {}).get('speed'),
+            'description': cur.get('weather', [{}])[0].get('description', desc),
+            'icon':        icon,
+            'weather_id':  weather_id,
+        }
+        # 5일 예보 (3시간 간격 → 일별 요약)
+        fc_url = f"{self.BASE_URL}/forecast?q={urllib.parse.quote(city)}&appid={key}&units=metric&lang=kr&cnt=40"
+        try:
+            fc_data = _http_get(fc_url)
+            daily = {}
+            for item in fc_data.get('list', []):
+                day = item['dt_txt'][:10]
+                if day not in daily:
+                    daily[day] = {'temps': [], 'icons': [], 'desc': item['weather'][0]['description']}
+                daily[day]['temps'].append(item['main']['temp'])
+                daily[day]['icons'].append(item['weather'][0]['id'])
+            forecast = []
+            for day, v in list(daily.items())[:5]:
+                wid = max(set(v['icons']), key=v['icons'].count)
+                ico, _ = self._icon(wid)
+                forecast.append({
+                    'date':    day,
+                    'min':     round(min(v['temps']), 1),
+                    'max':     round(max(v['temps']), 1),
+                    'icon':    ico,
+                    'desc':    v['desc'],
+                })
+        except Exception:
+            forecast = []
+
+        return {
+            'provider': 'openweathermap',
+            'current':  current,
+            'forecast': forecast,
+        }
+
+
+class WeatherKrService:
+    """기상청 단기예보 API (공공데이터포털)."""
+
+    def test_connection(self, config):
+        if not config.api_key:
+            return False, '기상청 API 키가 없습니다.'
+        return True, 'API 키 등록됨 (실제 조회 시 검증됩니다)'
+
+    def fetch_data(self, config, **kwargs):
+        # 기상청 API는 격자 좌표(nx, ny) 필요
+        nx  = config.extra_config.get('nx', 60)
+        ny  = config.extra_config.get('ny', 127)
+        from datetime import date
+        today = date.today().strftime('%Y%m%d')
+        url = (
+            f"https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
+            f"?serviceKey={config.api_key}&numOfRows=10&pageNo=1"
+            f"&dataType=JSON&base_date={today}&base_time=0600&nx={nx}&ny={ny}"
+        )
+        data = _http_get(url)
+        items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+        result = {v['category']: v['obsrValue'] for v in items}
+        return {
+            'provider': 'weather_kr',
+            'temp':     result.get('T1H'),
+            'humidity': result.get('REH'),
+            'rain_yn':  result.get('PTY', '0'),
+            'raw':      result,
+        }
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. Economic Indicators (한국은행 ECOS)
+# ─────────────────────────────────────────────────────────────
+
+class EcosEconomicService:
+    """
+    한국은행 ECOS – 경제지표 조회.
+    기준금리, 소비자물가(CPI), 경제성장률, 실업률, 수출입 등
+    https://ecos.bok.or.kr/
+    """
+    BASE_URL = 'https://ecos.bok.or.kr/api'
+
+    # 지표코드 → (stat_code, item_code, 단위, 주기)
+    INDICATORS = {
+        'base_rate':   ('722Y001', '0101000',  '%',  'MM', '기준금리'),
+        'cpi':         ('901Y009', '0',         '지수', 'MM', '소비자물가지수'),
+        'gdp_growth':  ('200Y001', '10101',     '%',  'QQ', 'GDP 성장률(전기비)'),
+        'unemployment':('901Y028', '99988',     '%',  'MM', '실업률'),
+        'export':      ('403Y004', 'W',         '백만달러', 'MM', '수출'),
+        'import':      ('403Y004', 'A',         '백만달러', 'MM', '수입'),
+    }
+
+    def _fetch_stat(self, api_key, stat_code, item_code, period_type, n=3):
+        from datetime import date, timedelta
+        end   = date.today()
+        # 기간별 시작일 계산
+        if period_type == 'QQ':
+            start = (end.replace(month=1, day=1) - timedelta(days=365)).strftime('%Y%m%d')
+        else:
+            start = (end - timedelta(days=120)).strftime('%Y%m%d')
+        end_s = end.strftime('%Y%m%d')
+        url = (
+            f"{self.BASE_URL}/StatisticSearch/{api_key}/json/kr"
+            f"/1/{n}/{stat_code}/{period_type}/{start}/{end_s}/{item_code}"
+        )
+        try:
+            data = _http_get(url)
+            rows = data.get('StatisticSearch', {}).get('row', [])
+            return [{'time': r.get('TIME'), 'value': r.get('DATA_VALUE')} for r in rows]
+        except Exception:
+            return []
+
+    def test_connection(self, config):
+        if not config.api_key:
+            return False, 'ECOS API 키가 없습니다.'
+        try:
+            rows = self._fetch_stat(config.api_key, '722Y001', '0101000', 'MM', 1)
+            if rows:
+                return True, f"연결 성공 – 기준금리 최신값 {rows[-1].get('value')}%"
+            return False, '데이터를 가져오지 못했습니다.'
+        except Exception as e:
+            return False, str(e)
+
+    def fetch_data(self, config, indicators=None, **kwargs):
+        key    = config.api_key
+        target = indicators or list(self.INDICATORS.keys())
+        result = {}
+        for name in target:
+            if name not in self.INDICATORS:
+                continue
+            stat_code, item_code, unit, period, label = self.INDICATORS[name]
+            rows = self._fetch_stat(key, stat_code, item_code, period, n=6)
+            if rows:
+                latest = rows[-1]
+                result[name] = {
+                    'label':   label,
+                    'value':   latest.get('value'),
+                    'unit':    unit,
+                    'time':    latest.get('time'),
+                    'history': rows,
+                }
+        return {'provider': 'ecos_economic', 'indicators': result}
+
+
+class DataGoKrEconomicService:
+    """공공데이터포털 경제지표 (fallback)."""
+
+    def test_connection(self, config):
+        if not config.api_key:
+            return False, '공공데이터포털 API 키가 없습니다.'
+        return True, 'API 키 등록됨 (실제 조회 시 검증됩니다)'
+
+    def fetch_data(self, config, **kwargs):
+        return {'provider': 'data_go_kr', 'message': '공공데이터포털 경제지표는 추후 지원 예정입니다.'}
+
+
+# ─────────────────────────────────────────────────────────────
 # Registry
 # ─────────────────────────────────────────────────────────────
 
 _SERVICE_MAP = {
-    'open_er':       OpenERService(),
-    'ecos':          EcosService(),
-    'sweettracker':  SweetTrackerService(),
-    'smartdelivery': SmartDeliveryService(),
-    'unipass':       UnipassService(),
-    'marinetraffic': MarineTrafficService(),
+    'open_er':        OpenERService(),
+    'ecos':           EcosService(),
+    'sweettracker':   SweetTrackerService(),
+    'smartdelivery':  SmartDeliveryService(),
+    'unipass':        UnipassService(),
+    'marinetraffic':  MarineTrafficService(),
+    'openweathermap': OpenWeatherMapService(),
+    'weather_kr':     WeatherKrService(),
+    'ecos_economic':  EcosEconomicService(),
+    'data_go_kr':     DataGoKrEconomicService(),
 }
 
 

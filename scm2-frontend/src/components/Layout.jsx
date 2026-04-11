@@ -4,7 +4,7 @@ import {
   Package, ShoppingCart, Warehouse, Factory,
   Users, DollarSign, CheckSquare, Truck,
   ClipboardList, LayoutDashboard, MessageSquare,
-  LogOut, Microscope, GitMerge, Bell, Menu, X, ShieldCheck,
+  LogOut, Microscope, GitMerge, Bell, Menu, X, ShieldCheck, Calculator,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import useAuthStore from '../stores/authStore'
@@ -25,6 +25,7 @@ const MENU = [
   { path: '/chat', icon: <MessageSquare size={16} />,  label: '메신저' },
   { path: '/wi',       icon: <ClipboardList size={16} />, label: '작업지시서' },
   { path: '/workflow', icon: <GitMerge size={16} />,     label: '결재 워크플로우' },
+  { path: '/calc',     icon: <Calculator size={16} />,   label: 'SCM 계산기' },
 ]
 
 function UnreadBadge() {

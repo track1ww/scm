@@ -16,6 +16,7 @@ import TmPage        from './pages/TmPage'
 import WiPage        from './pages/WiPage'
 import WorkflowPage  from './pages/WorkflowPage'
 import AdminPage     from './pages/AdminPage'
+import ScmCalcPage   from './pages/ScmCalcPage'
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="wi"       element={<WiPage />} />
             <Route path="workflow" element={<WorkflowPage />} />
             <Route path="admin"   element={<AdminPage />} />
+            <Route path="calc"    element={<ScmCalcPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

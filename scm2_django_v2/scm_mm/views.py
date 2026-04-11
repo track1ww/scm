@@ -1,20 +1,28 @@
+import math
 from decimal import Decimal
+from collections import defaultdict
 
+from django.db.models import Sum
+from django.db.models.functions import TruncMonth
 from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from scm_core.mixins import AuditLogMixin
+from .utils import calc_safety_stock, calc_eoq, calc_reorder_point
 from .models import (
     Supplier, Material, PurchaseOrder, PurchaseOrderLine,
     GoodsReceipt, MaterialPriceHistory, RFQ, SupplierEvaluation,
+    SupplierMaterialConfig,
 )
 from .serializers import (
     SupplierSerializer, MaterialSerializer,
     PurchaseOrderSerializer, PurchaseOrderLineSerializer,
     GoodsReceiptSerializer, MaterialPriceHistorySerializer,
     RFQSerializer, SupplierEvaluationSerializer,
+    SupplierMaterialConfigSerializer,
 )
 
 class SupplierViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -362,3 +370,315 @@ class SupplierEvaluationViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(company=self.request.user.company)
+
+
+class SupplierMaterialConfigViewSet(viewsets.ModelViewSet):
+    """품목+매입처 조합 리드타임 설정"""
+    serializer_class = SupplierMaterialConfigSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['material', 'supplier']
+
+    def get_queryset(self):
+        return SupplierMaterialConfig.objects.filter(
+            company=self.request.user.company
+        ).select_related('material', 'supplier')
+
+    def perform_create(self, serializer):
+        serializer.save(company=self.request.user.company)
+
+
+# ─── SCM 계산기 API ───────────────────────────────────────────────────────────
+
+# 재고 유형별 기본 서비스 수준 / 위험재고 리드타임 비율
+_INV_TYPE_CONFIG = {
+    'raw_material':  {'service_level': 0.95, 'danger_factor': 0.5, 'label': '원자재'},
+    'finished_good': {'service_level': 0.99, 'danger_factor': 0.3, 'label': '완제품'},
+    'semi_finished': {'service_level': 0.95, 'danger_factor': 0.5, 'label': '반제품'},
+    'mro':           {'service_level': 0.90, 'danger_factor': 0.7, 'label': '소모품/MRO'},
+    'perishable':    {'service_level': 0.98, 'danger_factor': 0.25, 'label': '신선/냉장'},
+}
+
+
+class CalculatorLeadTimeView(APIView):
+    """GET /mm/calculator/lead-time/?material_id=X&supplier_id=Y
+    우선순위: 품목+매입처 조합 > 품목 기본값 > 매입처 기본값 > 시스템 기본값(7)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        material_id = request.query_params.get('material_id')
+        supplier_id = request.query_params.get('supplier_id')
+        company     = request.user.company
+
+        source     = 'default'
+        lead_time  = 7
+        material_name = ''
+        supplier_name = ''
+
+        # 1. 품목+매입처 조합
+        if material_id and supplier_id:
+            cfg = SupplierMaterialConfig.objects.filter(
+                company=company, material_id=material_id, supplier_id=supplier_id
+            ).first()
+            if cfg:
+                lead_time = cfg.lead_time_days
+                source    = 'material_supplier'
+
+        # 2. 품목 기본값
+        if source == 'default' and material_id:
+            mat = Material.objects.filter(company=company, pk=material_id).first()
+            if mat:
+                lead_time     = mat.lead_time_days
+                material_name = mat.material_name
+                source        = 'material'
+
+        # 3. 매입처 기본값
+        if source == 'default' and supplier_id:
+            sup = Supplier.objects.filter(company=company, pk=supplier_id).first()
+            if sup:
+                lead_time     = sup.lead_time_days
+                supplier_name = sup.name
+                source        = 'supplier'
+
+        # 품목/매입처 이름 보완
+        if material_id and not material_name:
+            mat = Material.objects.filter(company=company, pk=material_id).first()
+            if mat: material_name = mat.material_name
+        if supplier_id and not supplier_name:
+            sup = Supplier.objects.filter(company=company, pk=supplier_id).first()
+            if sup: supplier_name = sup.name
+
+        source_label = {
+            'material_supplier': f'품목+매입처 조합 설정값',
+            'material':          f'품목 기본값 ({material_name})',
+            'supplier':          f'매입처 기본값 ({supplier_name})',
+            'default':           '시스템 기본값',
+        }[source]
+
+        return Response({
+            'lead_time_days': lead_time,
+            'source':         source,
+            'source_label':   source_label,
+            'material_name':  material_name,
+            'supplier_name':  supplier_name,
+        })
+
+
+class CalculatorSafetyStockView(APIView):
+    """POST /mm/calculator/safety-stock/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        d = request.data
+        inv_type      = d.get('inventory_type', 'raw_material')
+        avg_demand    = float(d.get('avg_demand', 0))
+        demand_std    = float(d.get('demand_std', 0))
+        lead_time     = float(d.get('lead_time', 1))
+        service_level = d.get('service_level')
+
+        cfg = _INV_TYPE_CONFIG.get(inv_type, _INV_TYPE_CONFIG['raw_material'])
+        sl  = float(service_level) if service_level is not None else cfg['service_level']
+
+        ss  = calc_safety_stock(demand_std, lead_time, sl)
+        rop = calc_reorder_point(avg_demand, lead_time, ss['safety_stock'])
+
+        danger_lt    = lead_time * cfg['danger_factor']
+        danger_stock = round(avg_demand * danger_lt, 2)
+
+        return Response({
+            'inventory_type':       inv_type,
+            'inventory_type_label': cfg['label'],
+            'service_level':        sl,
+            'z_score':              ss['z'],
+            'safety_stock':         ss['safety_stock'],
+            'danger_stock':         danger_stock,
+            'reorder_point':        rop['rop'],
+            'lead_time_demand':     rop['lead_time_demand'],
+            'interpretation': {
+                'safety_stock': f"재고가 {ss['safety_stock']} 이하로 떨어지면 안전재고 진입",
+                'danger_stock': f"재고가 {danger_stock} 이하로 떨어지면 위험재고 — 긴급 발주 필요",
+                'reorder_point': f"재고가 {rop['rop']} 이하로 떨어지면 즉시 발주",
+            }
+        })
+
+
+class CalculatorEOQView(APIView):
+    """POST /mm/calculator/eoq/"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        d = request.data
+        annual_demand = float(d.get('annual_demand', 0))
+        order_cost    = float(d.get('order_cost', 0))
+        holding_cost  = float(d.get('holding_cost', 0))
+
+        if holding_cost <= 0:
+            return Response({'error': '보관비용(holding_cost)은 0보다 커야 합니다.'}, status=400)
+        if annual_demand <= 0:
+            return Response({'error': '연간 수요량(annual_demand)은 0보다 커야 합니다.'}, status=400)
+
+        result = calc_eoq(annual_demand, order_cost, holding_cost)
+        result['annual_order_cost']   = round(result['annual_orders'] * order_cost, 0)
+        result['annual_holding_cost'] = round(result['eoq'] / 2 * holding_cost, 0)
+        result['total_annual_cost']   = round(
+            result['annual_order_cost'] + result['annual_holding_cost'], 0
+        )
+        return Response(result)
+
+
+class CalculatorDemandForecastView(APIView):
+    """GET /mm/calculator/demand-forecast/
+    item_code, method (sma|wma|exp), history_months, forecast_periods
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from scm_wm.models import StockMovement
+
+        item_code        = request.query_params.get('item_code', '')
+        method           = request.query_params.get('method', 'wma')
+        history_months   = int(request.query_params.get('history_months', 6))
+        forecast_periods = int(request.query_params.get('forecast_periods', 3))
+        company          = request.user.company
+
+        qs = StockMovement.objects.filter(
+            company=company, movement_type='OUT'
+        )
+        if item_code:
+            qs = qs.filter(material_code=item_code)
+
+        monthly = (
+            qs.annotate(month=TruncMonth('created_at'))
+              .values('month', 'material_code', 'material_name')
+              .annotate(total_qty=Sum('quantity'))
+              .order_by('material_code', 'month')
+        )
+
+        # 품목별 그룹화
+        grouped = defaultdict(list)
+        for row in monthly:
+            grouped[(row['material_code'], row['material_name'])].append({
+                'month': row['month'].strftime('%Y-%m') if row['month'] else '',
+                'qty':   float(row['total_qty'] or 0),
+            })
+
+        results = []
+        for (code, name), history in grouped.items():
+            hist = history[-history_months:]
+            qtys = [h['qty'] for h in hist]
+            if not qtys:
+                continue
+
+            forecast = self._forecast(qtys, method, forecast_periods)
+            avg      = round(sum(qtys) / len(qtys), 1)
+            std      = round(
+                math.sqrt(sum((q - avg) ** 2 for q in qtys) / max(len(qtys), 1)), 1
+            )
+
+            results.append({
+                'item_code':        code,
+                'item_name':        name,
+                'history':          hist,
+                'forecast':         forecast,
+                'avg_monthly':      avg,
+                'std_monthly':      std,
+                'method':           method,
+                'recommended_order': max(0, round(forecast[0]['forecast'] if forecast else avg, 0)),
+            })
+
+        return Response({'results': results, 'method': method})
+
+    def _forecast(self, qtys, method, periods):
+        n = len(qtys)
+        forecasts = []
+        if n == 0:
+            return forecasts
+
+        if method == 'sma':
+            window = min(3, n)
+            base   = sum(qtys[-window:]) / window
+            for i in range(periods):
+                forecasts.append({'period': i + 1, 'forecast': round(base, 1)})
+
+        elif method == 'wma':
+            window  = min(3, n)
+            weights = list(range(1, window + 1))
+            vals    = qtys[-window:]
+            base    = sum(w * v for w, v in zip(weights, vals)) / sum(weights)
+            for i in range(periods):
+                forecasts.append({'period': i + 1, 'forecast': round(base, 1)})
+
+        elif method == 'exp':
+            alpha = 0.3
+            s     = qtys[0]
+            for q in qtys[1:]:
+                s = alpha * q + (1 - alpha) * s
+            for i in range(periods):
+                forecasts.append({'period': i + 1, 'forecast': round(s, 1)})
+                s = alpha * s + (1 - alpha) * s  # 미래 기간은 자기 자신으로 갱신
+
+        return forecasts
+
+
+class CalculatorTransferListView(APIView):
+    """GET /mm/calculator/transfer-list/
+    창고 간 재고 불균형 탐지 → 이관 권고 목록 반환
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from scm_wm.models import Inventory
+
+        company = request.user.company
+        inv_qs  = Inventory.objects.filter(company=company).select_related('warehouse')
+
+        # item_code별로 창고 재고 집계
+        item_map = defaultdict(list)
+        for inv in inv_qs:
+            item_map[inv.item_code].append({
+                'warehouse_id':   inv.warehouse_id,
+                'warehouse_name': inv.warehouse.warehouse_name if inv.warehouse else '-',
+                'item_name':      inv.item_name,
+                'stock_qty':      inv.stock_qty,
+                'min_stock':      inv.min_stock,
+                'category':       inv.category,
+            })
+
+        transfer_list = []
+        for item_code, warehouses in item_map.items():
+            if len(warehouses) < 2:
+                continue  # 창고 1곳뿐이면 이관 불필요
+
+            # 부족 창고: stock_qty < min_stock
+            deficit  = [w for w in warehouses if w['min_stock'] > 0 and w['stock_qty'] < w['min_stock']]
+            # 여유 창고: stock_qty > min_stock * 2 (여유분 = stock - min_stock)
+            surplus  = [w for w in warehouses if w['stock_qty'] > w['min_stock'] * 2 and w['min_stock'] > 0]
+
+            if not deficit or not surplus:
+                continue
+
+            for d in deficit:
+                needed = d['min_stock'] - d['stock_qty']
+                for s in surplus:
+                    available = s['stock_qty'] - s['min_stock']  # 안전재고 초과분
+                    transfer_qty = min(needed, available)
+                    if transfer_qty <= 0:
+                        continue
+                    transfer_list.append({
+                        'item_code':       item_code,
+                        'item_name':       d['item_name'],
+                        'category':        d['category'],
+                        'from_warehouse':  s['warehouse_name'],
+                        'to_warehouse':    d['warehouse_name'],
+                        'transfer_qty':    transfer_qty,
+                        'deficit_stock':   d['stock_qty'],
+                        'deficit_min':     d['min_stock'],
+                        'surplus_stock':   s['stock_qty'],
+                        'urgency':         '긴급' if d['stock_qty'] == 0 else '권고',
+                    })
+                    needed -= transfer_qty
+                    if needed <= 0:
+                        break
+
+        transfer_list.sort(key=lambda x: (x['urgency'] == '권고', x['item_code']))
+        return Response({'results': transfer_list, 'count': len(transfer_list)})

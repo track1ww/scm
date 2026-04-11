@@ -122,7 +122,10 @@
       "Bash(python fix_db_schema.py)",
       "Bash(python manage.py migrate scm_tm --fake-initial)",
       "Bash(python manage.py migrate scm_external)",
-      "Bash(find C:/Users/yuns/scm2_django_v2/scm_accounts -name *.py)"
+      "Bash(find C:/Users/yuns/scm2_django_v2/scm_accounts -name *.py)",
+      "Bash(venv\\\\Scripts\\\\python.exe manage.py migrate scm_mm)",
+      "Bash(python manage.py makemigrations scm_sub)",
+      "Bash(python manage.py migrate scm_sub)"
     ]
   }
 }

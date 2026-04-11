@@ -76,13 +76,29 @@ export default function DashboardPage() {
     staleTime: 5 * 60 * 1000,
   })
 
-  const hasExchangeRate = activeFeatures.includes('exchange_rate')
+  const hasExchangeRate       = activeFeatures.includes('exchange_rate')
+  const hasWeather            = activeFeatures.includes('weather')
+  const hasEconomicIndicators = activeFeatures.includes('economic_indicators')
 
   const { data: rateData } = useQuery({
     queryKey: ['external-exchange-rates'],
     queryFn: () => client.get('/external/proxy/exchange-rates/').then(r => r.data),
     enabled: hasExchangeRate,
     refetchInterval: 300000,
+  })
+
+  const { data: weatherData } = useQuery({
+    queryKey: ['external-weather'],
+    queryFn: () => client.get('/external/proxy/weather/').then(r => r.data),
+    enabled: hasWeather,
+    refetchInterval: 600000,  // 10분
+  })
+
+  const { data: econData } = useQuery({
+    queryKey: ['external-economic-indicators'],
+    queryFn: () => client.get('/external/proxy/economic-indicators/').then(r => r.data),
+    enabled: hasEconomicIndicators,
+    refetchInterval: 3600000,  // 1시간
   })
 
   if (isLoading) return (
@@ -341,6 +357,80 @@ export default function DashboardPage() {
           )
         })() : (
           <div className="text-sm text-gray-400">환율 정보를 불러오는 중...</div>
+        )}
+      </div>
+
+      {/* 날씨 위젯 */}
+      <div className="mt-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-base leading-none">🌤️</span>
+          <h3 className="font-semibold text-gray-700 text-sm">날씨</h3>
+          {hasWeather && <span className="text-xs text-gray-400 ml-1">10분마다 갱신</span>}
+        </div>
+        {!hasWeather ? (
+          <div className="border border-dashed border-gray-300 rounded-lg p-5 text-center text-sm text-gray-400 bg-gray-50">
+            관리자 페이지 &gt; 외부 API 관리에서 날씨 API를 등록하시면 나타납니다.
+          </div>
+        ) : !weatherData ? (
+          <div className="text-sm text-gray-400">날씨 정보를 불러오는 중...</div>
+        ) : (
+          <div className="flex gap-4 flex-wrap">
+            {/* 현재 날씨 */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-lg p-4 flex items-center gap-4 flex-1 min-w-52">
+              <span className="text-4xl leading-none">{weatherData.current?.icon}</span>
+              <div>
+                <div className="text-xs text-gray-500 mb-0.5">{weatherData.current?.city} · 현재</div>
+                <div className="text-2xl font-bold text-gray-900">{weatherData.current?.temp}°C</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  체감 {weatherData.current?.feels_like}°C · 습도 {weatherData.current?.humidity}%
+                  {weatherData.current?.wind_speed != null && ` · 바람 ${weatherData.current.wind_speed}m/s`}
+                </div>
+                <div className="text-xs text-blue-600 mt-1">{weatherData.current?.description}</div>
+              </div>
+            </div>
+            {/* 5일 예보 */}
+            {weatherData.forecast?.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {weatherData.forecast.map((d, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-3 text-center min-w-16">
+                    <div className="text-xs text-gray-400 mb-1">{d.date?.slice(5)}</div>
+                    <div className="text-xl leading-none mb-1">{d.icon}</div>
+                    <div className="text-xs font-semibold text-gray-700">{d.max}°</div>
+                    <div className="text-xs text-gray-400">{d.min}°</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 경제지표 위젯 */}
+      <div className="mt-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-base leading-none">📊</span>
+          <h3 className="font-semibold text-gray-700 text-sm">경제지표</h3>
+          {hasEconomicIndicators && <span className="text-xs text-gray-400 ml-1">1시간마다 갱신 · 한국은행 ECOS</span>}
+        </div>
+        {!hasEconomicIndicators ? (
+          <div className="border border-dashed border-gray-300 rounded-lg p-5 text-center text-sm text-gray-400 bg-gray-50">
+            관리자 페이지 &gt; 외부 API 관리에서 경제지표 API를 등록하시면 나타납니다.
+          </div>
+        ) : !econData ? (
+          <div className="text-sm text-gray-400">경제지표를 불러오는 중...</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {Object.entries(econData.indicators || {}).map(([key, ind]) => (
+              <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
+                <div className="text-xs text-gray-400 mb-1 truncate">{ind.label}</div>
+                <div className="text-lg font-bold text-gray-900">
+                  {ind.value != null ? Number(ind.value).toLocaleString() : '-'}
+                  <span className="text-xs font-normal text-gray-400 ml-0.5">{ind.unit}</span>
+                </div>
+                <div className="text-xs text-gray-400 mt-0.5">{ind.time}</div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

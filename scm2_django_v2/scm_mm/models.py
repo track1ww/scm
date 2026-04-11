@@ -9,6 +9,7 @@ class Supplier(models.Model):
     phone         = models.CharField(max_length=50, blank=True)
     payment_terms = models.CharField(max_length=50, default='30일')
     status        = models.CharField(max_length=20, default='활성')
+    lead_time_days = models.IntegerField(default=7)
     created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self): return self.name
@@ -137,3 +138,20 @@ class MaterialPriceHistory(models.Model):
 
     def __str__(self):
         return f"{self.material.material_name} {self.unit_price} ({self.effective_from})"
+
+
+class SupplierMaterialConfig(models.Model):
+    """품목+매입처 조합별 리드타임 및 최소발주량 설정"""
+    company        = models.ForeignKey('scm_accounts.Company', on_delete=models.CASCADE)
+    material       = models.ForeignKey(Material, on_delete=models.CASCADE, related_name='supplier_configs')
+    supplier       = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='material_configs')
+    lead_time_days = models.IntegerField(default=7)
+    min_order_qty  = models.IntegerField(default=1)
+    note           = models.CharField(max_length=200, blank=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['company', 'material', 'supplier']
+
+    def __str__(self):
+        return f"{self.supplier.name} × {self.material.material_name} ({self.lead_time_days}일)"

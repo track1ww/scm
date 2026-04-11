@@ -62,6 +62,26 @@ const FEATURES = [
       { value: 'marinetraffic', label: 'Marine Traffic' },
     ],
   },
+  {
+    key: 'weather',
+    label: '날씨 조회',
+    icon: '🌤️',
+    desc: '현재 날씨 및 5일 예보 — 대시보드에 표시',
+    providers: [
+      { value: 'openweathermap', label: 'OpenWeatherMap (무료 API 키 필요)' },
+      { value: 'weather_kr',     label: '기상청 (공공데이터포털)' },
+    ],
+  },
+  {
+    key: 'economic_indicators',
+    label: '경제지표 조회',
+    icon: '📊',
+    desc: '기준금리·CPI·GDP·실업률·수출입 — 대시보드에 표시',
+    providers: [
+      { value: 'ecos_economic', label: '한국은행 ECOS OpenAPI' },
+      { value: 'data_go_kr',    label: '공공데이터포털' },
+    ],
+  },
 ]
 
 function buildDefaultPerms() {

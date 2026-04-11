@@ -177,3 +177,34 @@ class RealTimeProxyViewSet(viewsets.ViewSet):
             return Response({'carriers': carriers})
         except Exception as e:
             return Response({'error': str(e)}, status=502)
+
+    # ── GET /api/external/proxy/weather/ ────────────────────────
+    @action(detail=False, methods=['get'], url_path='weather')
+    def weather(self, request):
+        """현재 날씨 + 5일 예보."""
+        config = self._get_active_config(request.user.company, 'weather')
+        if not config:
+            return Response({'error': '날씨 API가 등록되지 않았습니다.'}, status=404)
+        try:
+            svc  = get_service(config.provider)
+            data = svc.fetch_data(config)
+            return Response(data)
+        except Exception as e:
+            logger.warning('weather proxy error: %s', e)
+            return Response({'error': str(e)}, status=502)
+
+    # ── GET /api/external/proxy/economic-indicators/ ─────────────
+    @action(detail=False, methods=['get'], url_path='economic-indicators')
+    def economic_indicators(self, request):
+        """경제지표 조회 (기준금리·CPI·GDP·실업률·수출입)."""
+        config = self._get_active_config(request.user.company, 'economic_indicators')
+        if not config:
+            return Response({'error': '경제지표 API가 등록되지 않았습니다.'}, status=404)
+        indicators = request.query_params.get('indicators', '').split(',') or None
+        try:
+            svc  = get_service(config.provider)
+            data = svc.fetch_data(config, indicators=indicators if indicators != [''] else None)
+            return Response(data)
+        except Exception as e:
+            logger.warning('economic_indicators proxy error: %s', e)
+            return Response({'error': str(e)}, status=502)

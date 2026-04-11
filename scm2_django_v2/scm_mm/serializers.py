@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Supplier, Material, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, MaterialPriceHistory, RFQ, SupplierEvaluation
+from .models import Supplier, Material, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, MaterialPriceHistory, RFQ, SupplierEvaluation, SupplierMaterialConfig
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -69,3 +69,14 @@ class SupplierEvaluationSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupplierEvaluation
         fields = '__all__'
+
+
+class SupplierMaterialConfigSerializer(serializers.ModelSerializer):
+    material_name = serializers.CharField(source='material.material_name', read_only=True)
+    material_code = serializers.CharField(source='material.material_code', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.name', read_only=True)
+
+    class Meta:
+        model = SupplierMaterialConfig
+        fields = '__all__'
+        read_only_fields = ['company']

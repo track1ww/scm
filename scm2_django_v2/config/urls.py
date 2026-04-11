@@ -38,4 +38,7 @@ urlpatterns = [
 
     # 외부 API 연동
     path('api/external/',       include('scm_external.urls')),
+
+    # 외주관리
+    path('api/sub/',            include('scm_sub.urls')),
 ]

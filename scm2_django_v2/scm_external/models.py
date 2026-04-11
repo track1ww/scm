@@ -4,22 +4,30 @@ from scm_accounts.models import Company
 
 class ExternalAPIConfig(models.Model):
     FEATURE_CHOICES = [
-        ('exchange_rate',     '환율 조회'),
-        ('delivery_tracking', '배송 추적'),
-        ('customs_tracking',  '통관 조회'),
-        ('vessel_tracking',   '선박 추적'),
+        ('exchange_rate',       '환율 조회'),
+        ('delivery_tracking',   '배송 추적'),
+        ('customs_tracking',    '통관 조회'),
+        ('vessel_tracking',     '선박 추적'),
+        ('weather',             '날씨 조회'),
+        ('economic_indicators', '경제지표 조회'),
     ]
     PROVIDER_CHOICES = [
         # 환율
-        ('open_er',       'Open Exchange Rates (무료·키 불필요)'),
-        ('ecos',          '한국은행 ECOS OpenAPI'),
+        ('open_er',          'Open Exchange Rates (무료·키 불필요)'),
+        ('ecos',             '한국은행 ECOS OpenAPI'),
         # 배송추적
-        ('sweettracker',  '스윗트래커'),
-        ('smartdelivery', '스마트택배 API'),
+        ('sweettracker',     '스윗트래커'),
+        ('smartdelivery',    '스마트택배 API'),
         # 통관
-        ('unipass',       '관세청 UNI-PASS'),
+        ('unipass',          '관세청 UNI-PASS'),
         # 선박
-        ('marinetraffic', 'Marine Traffic'),
+        ('marinetraffic',    'Marine Traffic'),
+        # 날씨
+        ('openweathermap',   'OpenWeatherMap'),
+        ('weather_kr',       '기상청 (공공데이터포털)'),
+        # 경제지표
+        ('ecos_economic',    '한국은행 ECOS (경제지표)'),
+        ('data_go_kr',       '공공데이터포털'),
     ]
 
     company       = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='api_configs')
