@@ -1,11 +1,6 @@
-![header](https://capsule-render.vercel.app/api?type=waving&color=auto&height=250&section=header&text=SCM%20%ED%86%B5%ED%95%A9%EA%B4%80%EB%A6%AC%20%EC%8B%9C%EC%8A%A4%ED%85%9C&fontSize=55&fontAlignY=38&desc=
 
-<div align="center">
+![headerer](https://capsule-render.vercel.app/api?type=waving&color=auto&height=150&section=header)
 
-
-</div>
-
----
 
 
 
